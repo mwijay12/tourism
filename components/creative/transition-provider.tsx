@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Lenis from "lenis";
+import { CurvedScrollProgress } from "@/components/creative/curved-scroll-progress";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -90,32 +91,24 @@ export function TransitionProvider({ children }: { children: React.ReactNode }) 
   const primaryLayerRef = useRef<HTMLDivElement | null>(null);
   const ridgePathRef = useRef<SVGPathElement | null>(null);
   const barFillRef = useRef<HTMLDivElement | null>(null);
-  const scrollRailRef = useRef<HTMLDivElement | null>(null);
   const lenisRef = useRef<Lenis | null>(null);
   const hasNavigatedRef = useRef(false);
 
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [meta, setMeta] = useState<TransitionMeta>(() => resolveMeta("/"));
 
-  // Sync Lenis + GSAP ScrollTrigger + Global Altitude Scroll Rail
+  const handleScrollTop = useCallback(() => {
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(0, { duration: 1.05 });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, []);
+
+  // Sync Lenis + GSAP ScrollTrigger
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    const updateRail = () => {
-      const doc = document.documentElement;
-      const max = Math.max(1, doc.scrollHeight - window.innerHeight);
-      const pct = Math.min(1, Math.max(0, window.scrollY / max));
-      if (scrollRailRef.current) {
-        scrollRailRef.current.style.transform = `scaleX(${pct})`;
-      }
-    };
-
-    window.addEventListener("scroll", updateRail, { passive: true });
-    updateRail();
-
-    if (reduced) {
-      return () => window.removeEventListener("scroll", updateRail);
-    }
+    if (reduced) return;
 
     const lenis = new Lenis({
       duration: 0.72,
@@ -128,7 +121,6 @@ export function TransitionProvider({ children }: { children: React.ReactNode }) 
 
     lenis.on("scroll", () => {
       ScrollTrigger.update();
-      updateRail();
     });
 
     const tick = (time: number) => {
@@ -138,7 +130,6 @@ export function TransitionProvider({ children }: { children: React.ReactNode }) 
     gsap.ticker.lagSmoothing(0);
 
     return () => {
-      window.removeEventListener("scroll", updateRail);
       gsap.ticker.remove(tick);
       lenis.destroy();
       lenisRef.current = null;
@@ -344,17 +335,8 @@ export function TransitionProvider({ children }: { children: React.ReactNode }) 
 
   return (
     <TransitionContext.Provider value={{ navigate, isTransitioning }}>
-      {/* Top Scroll Progress Bar */}
-      <div
-        aria-hidden="true"
-        className="fixed inset-x-0 top-0 z-[120] h-[2px] pointer-events-none bg-transparent"
-      >
-        <div
-          ref={scrollRailRef}
-          style={{ transform: "scaleX(0)", transformOrigin: "left center" }}
-          className="h-full w-full bg-gradient-to-r from-[#2e7c52] via-[#e5a853] to-[#62b388]"
-        />
-      </div>
+      {/* Curved Flowing SVG Mountain Skyline + Floating S-Trail Altitude Progress */}
+      <CurvedScrollProgress onScrollTop={handleScrollTop} />
 
       <div ref={stageRef} className="flex flex-1 flex-col">
         {children}

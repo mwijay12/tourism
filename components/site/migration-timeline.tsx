@@ -3,14 +3,20 @@
 import React, { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { DrawSVGPlugin } from "gsap/DrawSVGPlugin";
+import { MotionPathPlugin } from "gsap/MotionPathPlugin";
 import { MIGRATION_SEASONS } from "@/lib/tanzania-data";
 import { Calendar, Mountain, Binoculars } from "lucide-react";
 
-gsap.registerPlugin(ScrollTrigger);
+gsap.registerPlugin(ScrollTrigger, DrawSVGPlugin, MotionPathPlugin);
+
+const RIVER_CURVE_PATH =
+  "M 18 10 C 34 80, 2 160, 20 240 C 36 320, 4 400, 18 480 C 34 560, 2 640, 20 720 C 34 770, 12 810, 18 850";
 
 export function MigrationTimeline() {
   const sectionRef = useRef<HTMLElement | null>(null);
-  const progressBarRef = useRef<HTMLDivElement | null>(null);
+  const riverActiveRef = useRef<SVGPathElement | null>(null);
+  const herdBeaconRef = useRef<SVGGElement | null>(null);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -20,17 +26,41 @@ export function MigrationTimeline() {
     if (reduced) return;
 
     const ctx = gsap.context(() => {
-      if (progressBarRef.current) {
-        gsap.to(progressBarRef.current, {
-          scaleY: 1,
-          ease: "none",
+      const river = riverActiveRef.current;
+      const beacon = herdBeaconRef.current;
+
+      if (river) {
+        const tl = gsap.timeline({
           scrollTrigger: {
             trigger: section,
-            start: "top 65%",
-            end: "bottom 75%",
-            scrub: true,
+            start: "top 62%",
+            end: "bottom 78%",
+            scrub: 0.6,
           },
         });
+
+        tl.fromTo(
+          river,
+          { drawSVG: "0% 0%" },
+          { drawSVG: "0% 100%", ease: "none", duration: 1 },
+          0
+        );
+
+        if (beacon) {
+          tl.to(
+            beacon,
+            {
+              motionPath: {
+                path: river,
+                align: river,
+                alignOrigin: [0.5, 0.5],
+              },
+              ease: "none",
+              duration: 1,
+            },
+            0
+          );
+        }
       }
 
       gsap.utils.toArray<HTMLElement>(".season-row").forEach((row) => {
@@ -85,30 +115,49 @@ export function MigrationTimeline() {
         <div className="max-w-2xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1 font-mono text-[10.5px] sm:text-[11px] uppercase tracking-[0.16em] text-primary">
             <Calendar className="h-3.5 w-3.5" />
-            GSAP ScrollTrigger · Annual Ecological Pulse
+            Curved River Telemetry · Annual Ecological Pulse
           </div>
           <h2 className="mt-4 font-serif text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.04]">
             When the herds move, every camp follows.
           </h2>
           <p className="mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground">
-            Tanzania is a twelve-month biosphere. Coordinate your Kilimanjaro summit window with the exact latitude of the Great Migration.
+            Tanzania is a twelve-month biosphere. Coordinate your Kilimanjaro summit window with the winding migration corridor across Ndutu, Grumeti, and the Mara River.
           </p>
         </div>
 
-        {/* Scrubbed vertical timeline */}
-        <div className="relative mt-10 sm:mt-14 pl-5 sm:pl-10">
-          {/* Background guide */}
-          <div
+        {/* Scrubbed curved S-river migration path */}
+        <div className="relative mt-10 sm:mt-14 pl-7 sm:pl-12">
+          <svg
             aria-hidden="true"
-            className="absolute left-1.5 sm:left-3 top-2 bottom-2 w-px bg-border"
-          />
-          {/* Scrub-filled active indicator */}
-          <div
-            ref={progressBarRef}
-            aria-hidden="true"
-            style={{ transform: "scaleY(0)", transformOrigin: "top center" }}
-            className="absolute left-1.5 sm:left-3 top-2 bottom-2 w-[2px] -ml-[0.5px] bg-primary"
-          />
+            viewBox="0 0 36 860"
+            preserveAspectRatio="none"
+            className="pointer-events-none absolute -left-0.5 sm:left-0 top-2 bottom-2 h-[calc(100%-16px)] w-6 sm:w-8 overflow-visible"
+            fill="none"
+          >
+            {/* Dashed Serengeti migration guide curve */}
+            <path
+              d={RIVER_CURVE_PATH}
+              stroke="currentColor"
+              className="text-border"
+              strokeWidth="1.6"
+              strokeDasharray="4 6"
+              strokeLinecap="round"
+            />
+            {/* Scrub-drawn active curved river trail */}
+            <path
+              ref={riverActiveRef}
+              d={RIVER_CURVE_PATH}
+              stroke="currentColor"
+              className="text-primary"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+            />
+            {/* Moving amber herd waypoint beacon gliding around curves */}
+            <g ref={herdBeaconRef}>
+              <circle r="7.5" fill="#e5a853" fillOpacity="0.28" />
+              <circle r="4" fill="#e5a853" stroke="#08100c" strokeWidth="1.2" />
+            </g>
+          </svg>
 
           <div className="space-y-6 sm:space-y-10">
             {MIGRATION_SEASONS.map((season) => (
@@ -116,12 +165,6 @@ export function MigrationTimeline() {
                 key={season.months}
                 className="season-row relative grid gap-5 sm:gap-6 rounded-2xl sm:rounded-3xl border border-border bg-background p-4 sm:p-7 lg:grid-cols-[1fr_300px] lg:items-center shadow-sm"
               >
-                {/* Timeline dot */}
-                <span
-                  aria-hidden="true"
-                  className="absolute -left-[21px] sm:-left-[34px] top-6 sm:top-8 h-3 w-3 sm:h-3.5 sm:w-3.5 rounded-full border-2 border-background bg-primary shadow"
-                />
-
                 <div>
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     <span className="rounded-full bg-primary/12 px-3 py-1 font-mono text-[11px] sm:text-xs font-semibold text-primary">
