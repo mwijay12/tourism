@@ -8,9 +8,9 @@ export function SiteFooter() {
     <RidgelineDitherFooter
       preset="auto"
       seed={19}
-      ridges={7}
-      pixel={2}
-      mist={0.82}
+      ridges={6}
+      pixel={3}
+      mist={0.78}
       drift={1}
       altimeter={true}
       name="Kibo & Plains"

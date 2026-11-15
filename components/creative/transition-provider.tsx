@@ -118,10 +118,11 @@ export function TransitionProvider({ children }: { children: React.ReactNode }) 
     }
 
     const lenis = new Lenis({
-      duration: 1.05,
+      duration: 0.72,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
-      touchMultiplier: 1.5,
+      wheelMultiplier: 1.15,
+      touchMultiplier: 1.25,
     });
     lenisRef.current = lenis;
 

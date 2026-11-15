@@ -111,9 +111,9 @@ const FRAGMENT_SHADER = `
 
   float fbm(vec2 p) {
     float val = 0.0;
-    float amp = 0.52;
+    float amp = 0.54;
     mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 3; i++) {
       val += amp * noise(p);
       p = rot * p * 2.05;
       amp *= 0.5;
@@ -282,10 +282,10 @@ export function WebGLTerrainShader() {
     let raf = 0;
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       const rect = canvas.getBoundingClientRect();
-      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      // Keep 1x CSS resolution for buttery 60fps fragment throughput
+      canvas.width = Math.max(1, Math.floor(rect.width));
+      canvas.height = Math.max(1, Math.floor(rect.height));
       gl.viewport(0, 0, canvas.width, canvas.height);
     };
 
@@ -293,28 +293,11 @@ export function WebGLTerrainShader() {
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
-    const io = new IntersectionObserver(
-      (entries) => {
-        isVisible = entries[0]?.isIntersecting ?? true;
-      },
-      { threshold: 0.05 }
-    );
-    io.observe(canvas);
-
-    const onMove = (e: PointerEvent) => {
-      const r = canvas.getBoundingClientRect();
-      if (r.width <= 0 || r.height <= 0) return;
-      targetX = (e.clientX - r.left) / r.width;
-      targetY = 1.0 - (e.clientY - r.top) / r.height;
-    };
-    canvas.addEventListener("pointermove", onMove, { passive: true });
-    canvas.addEventListener("pointerdown", onMove, { passive: true });
-
     const start = performance.now();
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const render = (now: number) => {
-      raf = requestAnimationFrame(render);
+      raf = 0;
       if (!isVisible) return;
 
       tweenGroup.update(now);
@@ -333,7 +316,35 @@ export function WebGLTerrainShader() {
       gl.uniform1f(uFreq, s.ridgeFreq);
       gl.uniform1f(uMist, s.mistDensity);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      if (isVisible) {
+        raf = requestAnimationFrame(render);
+      }
     };
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const nextVisible = entries[0]?.isIntersecting ?? false;
+        isVisible = nextVisible;
+        if (nextVisible && !raf) {
+          raf = requestAnimationFrame(render);
+        } else if (!nextVisible && raf) {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
+      },
+      { threshold: 0.05 }
+    );
+    io.observe(canvas);
+
+    const onMove = (e: PointerEvent) => {
+      const r = canvas.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+      targetX = (e.clientX - r.left) / r.width;
+      targetY = 1.0 - (e.clientY - r.top) / r.height;
+    };
+    canvas.addEventListener("pointermove", onMove, { passive: true });
+    canvas.addEventListener("pointerdown", onMove, { passive: true });
 
     raf = requestAnimationFrame(render);
 

@@ -34,8 +34,7 @@ const FRAG = `
     float ripple = sin(dist * 24.0 - u_time * 5.0) * exp(-dist * 4.5);
     vec2 dir = normalize(uv - m + 0.0001);
 
-    // Subtle Codrops-style chromatic & liquid hover displacement
-    float strength = u_hover * 0.024;
+    float strength = u_hover * 0.022;
     vec2 offsetR = dir * ripple * strength * 1.35;
     vec2 offsetG = dir * ripple * strength * 1.0;
     vec2 offsetB = dir * ripple * strength * 0.65;
@@ -49,15 +48,19 @@ const FRAG = `
 `;
 
 /**
- * Renders a crisp static <img> at all times and progressively enhances hover
- * interactions with a WebGL GLSL ripple & chromatic aberration shader.
+ * Renders a fast native <img> by default (zero idle WebGL contexts on load)
+ * and lazily activates a WebGL GLSL ripple + chromatic hover shader ONLY while
+ * actively hovered on pointer-capable devices.
  */
 export function WebGLImagePlane({ src, alt, className }: WebGLImagePlaneProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [activeHover, setActiveHover] = useState(false);
   const [shaderReady, setShaderReady] = useState(false);
 
   useEffect(() => {
+    if (!activeHover) return;
+
     const wrap = wrapRef.current;
     const canvas = canvasRef.current;
     if (!wrap || !canvas) return;
@@ -65,7 +68,7 @@ export function WebGLImagePlane({ src, alt, className }: WebGLImagePlaneProps) {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) return;
 
-    const gl = canvas.getContext("webgl", { alpha: false, antialias: true });
+    const gl = canvas.getContext("webgl", { alpha: false, antialias: false });
     if (!gl) return;
 
     const compile = (type: number, code: string) => {
@@ -107,10 +110,12 @@ export function WebGLImagePlane({ src, alt, className }: WebGLImagePlaneProps) {
 
     const texture = gl.createTexture();
     let texLoaded = false;
+    let disposed = false;
 
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
+      if (disposed) return;
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -122,19 +127,13 @@ export function WebGLImagePlane({ src, alt, className }: WebGLImagePlaneProps) {
     };
     img.src = src;
 
-    const syncSize = () => {
-      const r = wrap.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-      canvas.width = Math.max(1, Math.floor(r.width * dpr));
-      canvas.height = Math.max(1, Math.floor(r.height * dpr));
-      gl.viewport(0, 0, canvas.width, canvas.height);
-    };
-    syncSize();
-    const ro = new ResizeObserver(syncSize);
-    ro.observe(wrap);
+    const r = wrap.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.floor(r.width));
+    canvas.height = Math.max(1, Math.floor(r.height));
+    gl.viewport(0, 0, canvas.width, canvas.height);
 
-    let targetHover = 0;
-    let currentHover = 0;
+    let targetHover = 1;
+    let currentHover = 0.2;
     let mx = 0.5;
     let my = 0.5;
     let tmx = 0.5;
@@ -143,56 +142,48 @@ export function WebGLImagePlane({ src, alt, className }: WebGLImagePlaneProps) {
     const start = performance.now();
 
     const drawFrame = (now: number) => {
+      if (disposed) return;
       raf = 0;
-      if (!texLoaded) return;
+      if (texLoaded) {
+        currentHover += (targetHover - currentHover) * 0.14;
+        mx += (tmx - mx) * 0.16;
+        my += (tmy - my) * 0.16;
 
-      currentHover += (targetHover - currentHover) * 0.12;
-      mx += (tmx - mx) * 0.14;
-      my += (tmy - my) * 0.14;
+        gl.useProgram(prog);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(uTex, 0);
+        gl.uniform2f(uMouse, mx, my);
+        gl.uniform1f(uHover, currentHover);
+        gl.uniform1f(uTime, (now - start) / 1000);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      }
 
-      gl.useProgram(prog);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.uniform1i(uTex, 0);
-      gl.uniform2f(uMouse, mx, my);
-      gl.uniform1f(uHover, currentHover);
-      gl.uniform1f(uTime, (now - start) / 1000);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-      if (targetHover > 0.01 || currentHover > 0.005) {
+      if (targetHover > 0.01 || currentHover > 0.01) {
         raf = requestAnimationFrame(drawFrame);
       }
     };
 
-    const wake = () => {
-      if (!raf) raf = requestAnimationFrame(drawFrame);
-    };
+    raf = requestAnimationFrame(drawFrame);
 
-    const onEnter = () => {
-      targetHover = 1;
-      wake();
-    };
     const onMove = (e: PointerEvent) => {
-      const r = wrap.getBoundingClientRect();
-      if (r.width <= 0 || r.height <= 0) return;
-      tmx = (e.clientX - r.left) / r.width;
-      tmy = (e.clientY - r.top) / r.height;
+      const rect = wrap.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      tmx = (e.clientX - rect.left) / rect.width;
+      tmy = (e.clientY - rect.top) / rect.height;
       targetHover = 1;
-      wake();
+      if (!raf) raf = requestAnimationFrame(drawFrame);
     };
     const onLeave = () => {
       targetHover = 0;
-      wake();
     };
 
-    wrap.addEventListener("pointerenter", onEnter);
-    wrap.addEventListener("pointermove", onMove);
-    wrap.addEventListener("pointerleave", onLeave);
+    wrap.addEventListener("pointermove", onMove, { passive: true });
+    wrap.addEventListener("pointerleave", onLeave, { passive: true });
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(raf);
-      ro.disconnect();
-      wrap.removeEventListener("pointerenter", onEnter);
       wrap.removeEventListener("pointermove", onMove);
       wrap.removeEventListener("pointerleave", onLeave);
       gl.deleteTexture(texture);
@@ -200,24 +191,36 @@ export function WebGLImagePlane({ src, alt, className }: WebGLImagePlaneProps) {
       gl.deleteProgram(prog);
       gl.deleteShader(vs);
       gl.deleteShader(fs);
+      setShaderReady(false);
     };
-  }, [src]);
+  }, [activeHover, src]);
 
   return (
-    <div ref={wrapRef} className={cn("relative overflow-hidden bg-muted", className)}>
+    <div
+      ref={wrapRef}
+      onPointerEnter={(e) => {
+        if (e.pointerType === "mouse") setActiveHover(true);
+      }}
+      onPointerLeave={() => setActiveHover(false)}
+      className={cn("relative overflow-hidden bg-muted", className)}
+    >
       <img
         src={src}
         alt={alt}
-        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
       />
-      <canvas
-        ref={canvasRef}
-        aria-hidden="true"
-        className={cn(
-          "pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-300",
-          shaderReady ? "opacity-0 group-hover:opacity-100" : "opacity-0"
-        )}
-      />
+      {activeHover && (
+        <canvas
+          ref={canvasRef}
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-200",
+            shaderReady ? "opacity-100" : "opacity-0"
+          )}
+        />
+      )}
     </div>
   );
 }
