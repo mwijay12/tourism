@@ -84,8 +84,8 @@ export function ParksShowcase() {
           </TransitionLink>
         </div>
 
-        {/* Region Filter Tabs */}
-        <div className="mt-10 flex flex-wrap gap-2">
+        {/* Region Filter Tabs (horizontal scroll on mobile) */}
+        <div className="mt-8 sm:mt-10 flex overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {REGIONS.map((item) => {
             const active = region === item;
             return (
@@ -93,7 +93,7 @@ export function ParksShowcase() {
                 key={item}
                 type="button"
                 onClick={() => setRegion(item)}
-                className={`cursor-pointer rounded-full px-4 py-2 text-xs font-medium transition-all ${
+                className={`shrink-0 cursor-pointer rounded-full px-4 py-2 text-xs font-medium transition-all ${
                   active
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "border border-border bg-card text-muted-foreground hover:text-foreground"

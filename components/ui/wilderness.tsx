@@ -285,7 +285,9 @@ export const ParallaxHero: React.FC<ParallaxHeroProps> = ({
         if (!layer) return;
         const { speedX, speedY, speedZ, rotation } = layer;
 
-        const computedLeft = parseFloat(getComputedStyle(el).left.replace("px", "")) || window.innerWidth / 2;
+        const computedLeft =
+          parseFloat(getComputedStyle(el).left.replace("px", "")) ||
+          window.innerWidth / 2;
         const isInLeft = computedLeft < window.innerWidth / 2 ? 1 : -1;
         const zValue = (cursorPosition - computedLeft) * isInLeft * 0.1;
 
@@ -296,13 +298,15 @@ export const ParallaxHero: React.FC<ParallaxHeroProps> = ({
         }px)) translateY(calc(-50% + ${yVal * speedY}px))`;
       });
 
-      if (textRef.current) {
-        const textSpeedX = 0.055;
-        const textSpeedY = 0.035;
-        const textSpeedZ = 0.07;
-        const textRotation = 0.03;
+      if (textRef.current && window.innerWidth >= 640) {
+        const textSpeedX = 0.05;
+        const textSpeedY = 0.03;
+        const textSpeedZ = 0.06;
+        const textRotation = 0.025;
 
-        const computedLeft = parseFloat(getComputedStyle(textRef.current).left.replace("px", "")) || window.innerWidth / 2;
+        const computedLeft =
+          parseFloat(getComputedStyle(textRef.current).left.replace("px", "")) ||
+          window.innerWidth / 2;
         const isInLeft = computedLeft < window.innerWidth / 2 ? 1 : -1;
         const zValue = (cursorPosition - computedLeft) * isInLeft * 0.1;
 
@@ -314,16 +318,16 @@ export const ParallaxHero: React.FC<ParallaxHeroProps> = ({
       }
     };
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       const newXValue = e.clientX - window.innerWidth / 2;
       const newYValue = e.clientY - window.innerHeight / 2;
-      const newRotateDegree = (newXValue / (window.innerWidth / 2)) * 18;
+      const newRotateDegree = (newXValue / (window.innerWidth / 2)) * 16;
       updateLayers(e.clientX, newXValue, newYValue, newRotateDegree);
     };
 
-    window.addEventListener("mousemove", handleMouseMove, { passive: true });
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("pointermove", handlePointerMove);
     };
   }, [layers]);
 
@@ -331,7 +335,7 @@ export const ParallaxHero: React.FC<ParallaxHeroProps> = ({
     <section
       ref={containerRef}
       className={cn(
-        "relative min-h-[92vh] h-screen w-full overflow-hidden bg-gradient-to-b from-[#060f0a] via-[#0c1e15] to-[#11281d]",
+        "relative flex min-h-[100svh] w-full items-center justify-center overflow-hidden bg-gradient-to-b from-[#060f0a] via-[#0c1e15] to-[#11281d] py-24 sm:py-28",
         className
       )}
     >
@@ -339,7 +343,7 @@ export const ParallaxHero: React.FC<ParallaxHeroProps> = ({
       {backdropSrc && (
         <div
           aria-hidden="true"
-          className="absolute inset-0 z-0 bg-cover bg-center opacity-55 mix-blend-luminosity scale-105 transition-transform duration-700"
+          className="absolute inset-0 z-0 bg-cover bg-center opacity-55 mix-blend-luminosity scale-105"
           style={{ backgroundImage: `url(${backdropSrc})` }}
         />
       )}
@@ -353,16 +357,16 @@ export const ParallaxHero: React.FC<ParallaxHeroProps> = ({
       {/* Vignette */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 z-[40] pointer-events-none bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_52%,rgba(4,10,7,0.78))]"
+        className="absolute inset-0 z-[40] pointer-events-none bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_52%,rgba(4,10,7,0.8))]"
       />
 
       {/* Bottom atmospheric blend into page */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-[60] h-40 bg-gradient-to-t from-[#08100c] via-[#08100c]/60 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-[60] h-32 sm:h-40 bg-gradient-to-t from-[#08100c] via-[#08100c]/60 to-transparent"
       />
 
-      {/* Multi-plane parallax depth layers */}
+      {/* Multi-plane parallax depth layers (trimmed lightly on very small phones for 60fps smoothness) */}
       {layers.map((layer, index) => {
         if (hiddenIndices[index]) return null;
         return (
@@ -381,7 +385,8 @@ export const ParallaxHero: React.FC<ParallaxHeroProps> = ({
               }))
             }
             className={cn(
-              "absolute pointer-events-none transition-transform duration-[450ms] ease-out opacity-75 select-none",
+              "absolute pointer-events-none transition-transform duration-[450ms] ease-out opacity-70 select-none",
+              index > 8 ? "hidden md:block" : "",
               layer.className
             )}
             style={{
@@ -395,31 +400,26 @@ export const ParallaxHero: React.FC<ParallaxHeroProps> = ({
         );
       })}
 
-      {/* Central Typography & Editorial Slots */}
+      {/* Central Typography & Editorial Slots (responsive relative on mobile, centered parallax on sm+) */}
       <div
         ref={textRef}
-        className="absolute z-[55] w-full max-w-6xl px-6 text-white text-center pointer-events-auto transition-transform duration-[450ms] ease-out"
-        style={{
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-        }}
+        className="relative sm:absolute z-[55] w-full max-w-6xl px-5 sm:px-6 text-white text-center pointer-events-auto transition-transform duration-[450ms] ease-out sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2"
       >
         {eyebrow && (
-          <div className="mb-5 inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-black/30 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.22em] text-[#d8eadf] backdrop-blur-md">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#e5a853]" />
-            {eyebrow}
+          <div className="mb-4 sm:mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-white/20 bg-black/35 px-3.5 sm:px-4 py-1.5 font-mono text-[9.5px] sm:text-[11px] uppercase tracking-[0.16em] sm:tracking-[0.22em] text-[#d8eadf] backdrop-blur-md">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e5a853]" />
+            <span className="truncate">{eyebrow}</span>
           </div>
         )}
-        <h1 className="font-serif font-semibold tracking-[-0.03em] text-white drop-shadow-[0_12px_40px_rgba(0,0,0,0.65)] text-[clamp(3.25rem,9vw,8.4rem)] leading-[0.88]">
+        <h1 className="font-serif font-semibold tracking-[-0.03em] text-white drop-shadow-[0_12px_40px_rgba(0,0,0,0.65)] text-[clamp(2.75rem,12vw,8.4rem)] leading-[0.9] break-words">
           {title}
         </h1>
         {subtitle && (
-          <p className="mx-auto mt-6 max-w-2xl text-base sm:text-lg leading-relaxed text-[#d7e5dc]/90">
+          <p className="mx-auto mt-4 sm:mt-6 max-w-2xl text-sm sm:text-lg leading-relaxed text-[#d7e5dc]/90">
             {subtitle}
           </p>
         )}
-        {children && <div className="mt-8">{children}</div>}
+        {children && <div className="mt-7 sm:mt-8">{children}</div>}
       </div>
     </section>
   );

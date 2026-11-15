@@ -93,8 +93,8 @@ export function KilimanjaroRouteChart() {
           </div>
         </div>
 
-        {/* Route Selector Tabs */}
-        <div className="mt-5 flex flex-wrap gap-2">
+        {/* Route Selector Tabs (horizontal scroll on mobile) */}
+        <div className="mt-5 flex overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {KILIMANJARO_ROUTES.map((r) => {
             const active = r.id === route.id;
             return (
@@ -102,7 +102,7 @@ export function KilimanjaroRouteChart() {
                 key={r.id}
                 type="button"
                 onClick={() => setSelectedId(r.id)}
-                className={`cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+                className={`shrink-0 cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
                   active
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "border border-border bg-background text-muted-foreground hover:text-foreground"

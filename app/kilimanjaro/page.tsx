@@ -39,16 +39,16 @@ export default function KilimanjaroPage() {
       </ParallaxHero>
 
       {/* Route Telemetry & Comparison */}
-      <section id="routes" className="w-full py-20 md:py-28 bg-background text-foreground">
-        <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
-          <div className="max-w-2xl mb-12">
-            <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+      <section id="routes" className="w-full py-16 sm:py-20 md:py-28 bg-background text-foreground">
+        <div className="mx-auto max-w-[1200px] px-4 sm:px-8">
+          <div data-scroll-reveal className="max-w-2xl mb-10 sm:mb-12">
+            <span className="font-mono text-[10.5px] sm:text-[11px] uppercase tracking-[0.2em] text-primary">
               TANAPA Official Ascent Trails
             </span>
-            <h2 className="mt-3 font-serif text-4xl sm:text-5xl font-semibold tracking-tight">
+            <h2 className="mt-3 font-serif text-3xl sm:text-5xl font-semibold tracking-tight">
               Choose your corridor to Uhuru Peak.
             </h2>
-            <p className="mt-4 text-base text-muted-foreground leading-relaxed">
+            <p className="mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed">
               Acclimatization time is the single decisive factor between turning back at Stella Point and standing atop Africa. Select any route below to inspect daily camp altitudes.
             </p>
           </div>
@@ -58,33 +58,35 @@ export default function KilimanjaroPage() {
       </section>
 
       {/* Four Ecological Zones */}
-      <section className="w-full py-20 md:py-24 bg-card/70 border-y border-border">
-        <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
-          <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-            <div>
-              <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+      <section className="w-full py-16 sm:py-20 md:py-24 bg-card/70 border-y border-border">
+        <div className="mx-auto max-w-[1200px] px-4 sm:px-8">
+          <div className="grid gap-8 sm:gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div data-scroll-reveal>
+              <span className="font-mono text-[10.5px] sm:text-[11px] uppercase tracking-[0.2em] text-primary">
                 Equator to Arctic
               </span>
-              <h2 className="mt-3 font-serif text-4xl sm:text-5xl font-semibold tracking-tight leading-[1.05]">
+              <h2 className="mt-3 font-serif text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.05]">
                 Four vertical worlds in eight days.
               </h2>
-              <p className="mt-4 text-base text-muted-foreground leading-relaxed">
+              <p className="mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed">
                 Climbing Kilimanjaro compresses the botanical sweep from equatorial rainforest to polar icecap into a week of measured footsteps.
               </p>
 
-              <div className="mt-8 grid grid-cols-2 gap-4">
+              <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4">
                 <div className="overflow-hidden rounded-2xl border border-border aspect-[4/3]">
                   <img
                     src="/images/kilimanjaro-panorama.jpg"
                     alt="Kilimanjaro massif rising above savannah acacia trees"
-                    className="h-full w-full object-cover"
+                    data-scroll-parallax
+                    className="h-full w-full object-cover will-change-transform"
                   />
                 </div>
                 <div className="overflow-hidden rounded-2xl border border-border aspect-[4/3]">
                   <img
                     src="/images/kilimanjaro-mawenzi-ridge.jpg"
                     alt="Hikers traversing snowfields toward Mawenzi"
-                    className="h-full w-full object-cover"
+                    data-scroll-parallax
+                    className="h-full w-full object-cover will-change-transform"
                   />
                 </div>
               </div>
@@ -94,6 +96,7 @@ export default function KilimanjaroPage() {
               {KILIMANJARO_ZONES.map((item) => (
                 <div
                   key={item.zone}
+                  data-scroll-reveal
                   className="rounded-2xl border border-border bg-background p-5 sm:p-6 shadow-sm"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">

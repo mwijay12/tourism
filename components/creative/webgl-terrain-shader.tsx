@@ -308,6 +308,7 @@ export function WebGLTerrainShader() {
       targetY = 1.0 - (e.clientY - r.top) / r.height;
     };
     canvas.addEventListener("pointermove", onMove, { passive: true });
+    canvas.addEventListener("pointerdown", onMove, { passive: true });
 
     const start = performance.now();
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -341,6 +342,7 @@ export function WebGLTerrainShader() {
       ro.disconnect();
       io.disconnect();
       canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerdown", onMove);
       gl.deleteBuffer(buf);
       gl.deleteProgram(prog);
       gl.deleteShader(vs);
@@ -357,7 +359,7 @@ export function WebGLTerrainShader() {
           {/* Interactive WebGL GLSL Topographic Shader Canvas */}
           <canvas
             ref={canvasRef}
-            className="absolute inset-0 h-full w-full cursor-crosshair"
+            className="absolute inset-0 h-full w-full cursor-crosshair touch-pan-y"
             aria-label="Interactive WebGL topographic elevation terrain shader of Tanzania"
           />
 
@@ -376,8 +378,8 @@ export function WebGLTerrainShader() {
                 {current.note} Move your pointer across the canvas to part atmospheric mist and illuminate contour isolines.
               </p>
 
-              {/* Zone selector pills */}
-              <div className="mt-7 flex flex-wrap gap-2.5">
+              {/* Zone selector pills — clean 2x2 grid on phones, inline pills on sm+ */}
+              <div className="mt-6 sm:mt-7 grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
                 {SHADER_ZONES.map((z, idx) => {
                   const active = idx === activeIndex;
                   return (
@@ -385,16 +387,16 @@ export function WebGLTerrainShader() {
                       key={z.id}
                       type="button"
                       onClick={() => setActiveIndex(idx)}
-                      className={`cursor-pointer rounded-full border px-4 py-2 text-left text-xs font-medium transition-all duration-300 backdrop-blur-md ${
+                      className={`cursor-pointer rounded-2xl sm:rounded-full border px-3 sm:px-4 py-2 text-left text-[11.5px] sm:text-xs font-medium transition-all duration-300 backdrop-blur-md ${
                         active
                           ? "border-white bg-white text-[#08100c] shadow-lg"
                           : "border-white/20 bg-black/40 text-white/85 hover:border-white/50 hover:bg-black/60"
                       }`}
                     >
-                      <span className="font-mono text-[10px] opacity-70 mr-1.5">
+                      <span className="block sm:inline font-mono text-[9.5px] sm:text-[10px] opacity-75 sm:mr-1.5">
                         {z.elevationM.toLocaleString()}m
                       </span>
-                      {z.label}
+                      <span className="line-clamp-1 sm:line-clamp-none">{z.label}</span>
                     </button>
                   );
                 })}

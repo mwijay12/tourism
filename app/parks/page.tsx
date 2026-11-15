@@ -41,8 +41,8 @@ function ParksAtlasContent() {
           </p>
         </div>
 
-        {/* Selector Pill Strip */}
-        <div className="mt-10 flex flex-wrap gap-2.5">
+        {/* Selector Pill Strip (horizontal scroll on mobile) */}
+        <div className="mt-8 sm:mt-10 flex overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-2 sm:gap-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {NATIONAL_PARKS.map((park) => {
             const active = park.slug === activePark.slug;
             return (
@@ -50,7 +50,7 @@ function ParksAtlasContent() {
                 key={park.slug}
                 type="button"
                 onClick={() => setSelectedSlug(park.slug)}
-                className={`cursor-pointer rounded-full px-4 py-2 text-xs font-medium transition-all ${
+                className={`shrink-0 cursor-pointer rounded-full px-4 py-2 text-xs font-medium transition-all ${
                   active
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "border border-border bg-card text-muted-foreground hover:text-foreground"
