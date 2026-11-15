@@ -3,7 +3,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { animate, svg, stagger } from "animejs";
+import {
+  MOTION_LAB_ART_CSS,
+  mountMotionLabDrawings,
+  type MountedDrawingsHandle,
+} from "@/components/creative/motion-lab-draw";
+import {
+  SafariSticker,
+  ScribbleUnderline,
+  STICKER_CSS,
+  mountMotionLabStickers,
+} from "@/components/creative/motion-lab-stickers";
 import {
   KilimanjaroCompassSvg,
   MigrationArcSvg,
@@ -13,107 +23,113 @@ import {
   ZanzibarDhowSvg,
 } from "@/components/creative/safari-svgs";
 import { TransitionLink } from "@/components/creative/transition-provider";
-import { ArrowUpRight, Radio } from "lucide-react";
+import { ArrowUpRight, Radio, RotateCcw } from "lucide-react";
 
 gsap.registerPlugin(ScrollTrigger);
 
-const INSTRUMENT_CSS = `
-.inst-card {
-  --svg-speed: 14s;
+const SKETCH_LAYOUT_CSS = `
+.ml-sketch-card {
+  scroll-snap-align: start;
 }
-.inst-card:hover,
-.inst-card[data-active="true"] {
-  --svg-speed: 3.2s;
+.ml-sketch-stage {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--foreground) 2.5%, var(--background));
 }
-.svg-spin-slow {
-  animation: svg-rotate var(--svg-speed, 14s) linear infinite;
+.ml-key-dot::before {
+  content: '';
+  display: inline-block;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-right: 0.55rem;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 0.08em;
 }
-.svg-wheel {
-  animation: svg-rotate calc(var(--svg-speed, 14s) * 0.52) linear infinite;
-}
-.svg-optic-ring {
-  animation: svg-rotate calc(var(--svg-speed, 14s) * 0.75) linear infinite;
-}
-.svg-optic-ring-rev {
-  animation: svg-rotate calc(var(--svg-speed, 14s) * 0.75) linear infinite reverse;
-}
-.svg-needle {
-  animation: svg-sway 4.2s ease-in-out infinite;
-}
-.svg-rock {
-  animation: svg-tilt 4.6s ease-in-out infinite;
-}
-@keyframes svg-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-@keyframes svg-sway {
-  0%, 100% { transform: rotate(-8deg); }
-  50% { transform: rotate(10deg); }
-}
-@keyframes svg-tilt {
-  0%, 100% { transform: rotate(-2.5deg) translateY(0px); }
-  50% { transform: rotate(2.5deg) translateY(-2.5px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .svg-spin-slow, .svg-wheel, .svg-optic-ring, .svg-optic-ring-rev, .svg-needle, .svg-rock {
-    animation: none !important;
+@media (max-width: 639px) {
+  .ml-sketches-rail {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 86%;
+    gap: 1rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1rem;
+    margin-inline: -1rem;
+    padding-inline: 1rem;
+    padding-bottom: 0.5rem;
+    scrollbar-width: none;
+  }
+  .ml-sketches-rail::-webkit-scrollbar {
+    display: none;
   }
 }
 `;
 
 const INSTRUMENTS = [
   {
+    key: "A",
     code: "01 / ALTITUDE",
     title: "Uhuru Survey & Acclimatization",
     metric: "5,895 m Kibo",
     liveTelemetry: "Barafu Ridge · -6°C · Wind 18 kt",
-    detail: "Barometric pacing on Lemosho & Northern Circuit with disciplined 'pole pole' daily elevation gain.",
+    detail:
+      "Barometric pacing on Lemosho & Northern Circuit with disciplined 'pole pole' daily elevation gain.",
     href: "/kilimanjaro",
     Svg: KilimanjaroCompassSvg,
   },
   {
+    key: "B",
     code: "02 / FLEET",
     title: "Extended 4x4 Land Cruisers",
     metric: "Pop-Top · Dual Spare",
     liveTelemetry: "Arusha Garage Checked · 320L Fuel Range",
-    detail: "Custom long-wheelbase Toyota Land Cruisers tuned for Serengeti corrugated tracks, with dual inverters.",
+    detail:
+      "Custom long-wheelbase Toyota Land Cruisers tuned for Serengeti corrugated tracks, with dual inverters.",
     href: "/parks",
     Svg: SafariCruiserWheelSvg,
   },
   {
+    key: "C",
     code: "03 / ECOLOGY",
     title: "Great Migration Intercepts",
     metric: "1.5M+ Wildebeest",
     liveTelemetry: "Mara & Ndutu GPS Tracked Daily",
-    detail: "Seasonal mobile tented camps positioned along exact Grumeti & Mara River crossing corridors.",
+    detail:
+      "Seasonal mobile tented camps positioned along exact Grumeti & Mara River crossing corridors.",
     href: "/#seasons",
     Svg: MigrationArcSvg,
   },
   {
+    key: "D",
     code: "04 / MEDICAL",
     title: "SpO2 Oximetry & Gamow Safety",
     metric: "KPAP Verified Crew",
     liveTelemetry: "AM/PM Lake Louise Check · 100% O2 Ready",
-    detail: "Twice-daily blood-oxygen checks, pressurized oxygen cylinders, and hyperbaric chambers on high routes.",
+    detail:
+      "Twice-daily blood-oxygen checks, pressurized oxygen cylinders, and hyperbaric chambers on high routes.",
     href: "/kilimanjaro#kpap",
     Svg: PulseOximeterSvg,
   },
   {
+    key: "E",
     code: "05 / OPTICS",
     title: "Master Naturalist Spotters",
     metric: "Swarovski Optics",
     liveTelemetry: "Big Five & 550+ Bird Species ID",
-    detail: "TALA-licensed Tanzanian guides trained in feline tracking, nocturnal ecology & telephoto positioning.",
+    detail:
+      "TALA-licensed Tanzanian guides trained in feline tracking, nocturnal ecology & telephoto positioning.",
     href: "/parks",
     Svg: OpticsBinocularsSvg,
   },
   {
+    key: "F",
     code: "06 / COAST",
     title: "Bush-to-Reef Zanzibar Dhows",
     metric: "Mnemba & Nungwi",
     liveTelemetry: "Direct Seronera Flight · 29°C Lagoon",
-    detail: "Step off the Serengeti airstrip straight onto white coral sands and private lateen-sail sunsets.",
+    detail:
+      "Step off the Serengeti airstrip straight onto white coral sands and private lateen-sail sunsets.",
     href: "/parks?park=zanzibar",
     Svg: ZanzibarDhowSvg,
   },
@@ -121,6 +137,8 @@ const INSTRUMENTS = [
 
 export function ExpeditionInstruments() {
   const sectionRef = useRef<HTMLElement | null>(null);
+  const railRef = useRef<HTMLDivElement | null>(null);
+  const drawHandleRef = useRef<MountedDrawingsHandle | null>(null);
   const [activeCode, setActiveCode] = useState<string>(INSTRUMENTS[0].code);
 
   useEffect(() => {
@@ -128,124 +146,216 @@ export function ExpeditionInstruments() {
     if (!section) return;
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) return;
 
-    const ctx = gsap.context(() => {
-      const cards = gsap.utils.toArray<HTMLElement>(".inst-card");
-      gsap.fromTo(
-        cards,
-        { y: 36, opacity: 0, scale: 0.97 },
-        {
-          y: 0,
-          opacity: 1,
-          scale: 1,
-          duration: 0.72,
-          stagger: 0.08,
-          ease: "power3.out",
-          clearProps: "transform",
-          scrollTrigger: {
-            trigger: section,
-            start: "top 78%",
-            once: true,
-            onEnter: () => {
-              const strokePaths = section.querySelectorAll<SVGPathElement>(".svg-draw-path");
-              if (strokePaths.length) {
-                const drawables = svg.createDrawable(strokePaths);
-                animate(drawables, {
-                  draw: ["0 0", "0 1"],
-                  delay: stagger(90, { start: 120 }),
-                  duration: 1050,
-                  ease: "outCubic",
-                });
-              }
+    const drawHandle = mountMotionLabDrawings(section);
+    drawHandleRef.current = drawHandle;
+    const destroyStickers = mountMotionLabStickers(section);
+
+    let ctx: gsap.Context | null = null;
+    if (!reduced) {
+      ctx = gsap.context(() => {
+        const cards = gsap.utils.toArray<HTMLElement>(".ml-sketch-card");
+        gsap.fromTo(
+          cards,
+          { y: 26, opacity: 0 },
+          {
+            y: 0,
+            opacity: 1,
+            duration: 0.65,
+            stagger: 0.07,
+            ease: "power3.out",
+            clearProps: "transform",
+            scrollTrigger: {
+              trigger: section,
+              start: "top 82%",
+              once: true,
             },
-          },
-        }
-      );
-    }, section);
+          }
+        );
+      }, section);
+    }
 
-    return () => ctx.revert();
+    return () => {
+      drawHandle.destroy();
+      drawHandleRef.current = null;
+      destroyStickers();
+      ctx?.revert();
+    };
   }, []);
 
   const currentInstrument =
     INSTRUMENTS.find((i) => i.code === activeCode) ?? INSTRUMENTS[0];
 
+  const handleSelectCard = (code: string, cardEl: HTMLElement | null) => {
+    setActiveCode(code);
+    if (cardEl) {
+      const svgHost = cardEl.querySelector("[data-draw]");
+      if (svgHost) drawHandleRef.current?.replayHost(svgHost);
+    }
+  };
+
+  const handleJumpMobile = (code: string, index: number) => {
+    setActiveCode(code);
+    const rail = railRef.current;
+    if (!rail) return;
+    const card = rail.children[index] as HTMLElement | undefined;
+    card?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+  };
+
   return (
     <section
       ref={sectionRef}
-      className="relative w-full py-16 sm:py-20 md:py-28 bg-background text-foreground border-t border-border overflow-hidden"
+      className="relative w-full py-16 sm:py-22 md:py-28 bg-background text-foreground border-t border-border overflow-x-clip"
     >
-      <style>{INSTRUMENT_CSS}</style>
-      <div className="mx-auto max-w-[1200px] px-4 sm:px-8">
+      <style>{MOTION_LAB_ART_CSS + STICKER_CSS + SKETCH_LAYOUT_CSS}</style>
+
+      {/* Motion Lab 4-Layer Safari Doodle Stickers (strictly clear of readable text) */}
+      <SafariSticker
+        name="summit"
+        tone="sun"
+        depth={0.22}
+        turn={10}
+        className="hidden lg:block top-8 right-[4%] [--ml-tilt:9deg] [--ml-size:6.75rem]"
+      />
+      <SafariSticker
+        name="spark"
+        tone="gold"
+        depth={0.14}
+        turn={-12}
+        className="hidden lg:block top-3 right-[12%] [--ml-tilt:0deg] [--ml-size:3.5rem]"
+      />
+      <SafariSticker
+        name="pin"
+        tone="sage"
+        depth={-0.16}
+        turn={-9}
+        className="hidden xl:block bottom-10 left-[2%] [--ml-tilt:-10deg] [--ml-size:6rem]"
+      />
+
+      <div className="relative z-10 mx-auto max-w-[1200px] px-4 sm:px-8">
+        {/* Header Row */}
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+          <div className="max-w-2xl">
             <span className="font-mono text-[10.5px] sm:text-[11px] uppercase tracking-[0.2em] text-primary">
-              Ufundi wa Nyikani · Interactive Field Instruments
+              Ufundi wa Nyikani · DrawSVG &amp; MotionPath Field Dossiers
             </span>
-            <h2 className="mt-3 font-serif text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.04]">
-              Built for mountain cold &amp; savannah dust.
+            <h2 className="mt-3 font-serif text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.06]">
+              Built for mountain cold &amp;{" "}
+              <span className="relative inline-block whitespace-nowrap">
+                savannah dust.
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-0 -bottom-2.5 w-full"
+                >
+                  <ScribbleUnderline />
+                </span>
+              </span>
             </h2>
           </div>
 
-          {/* Live active telemetry ticker */}
-          <div className="flex items-center gap-3 self-start lg:self-auto rounded-2xl border border-border bg-card px-4 py-2.5 text-xs shadow-sm">
-            <Radio className="h-4 w-4 text-[#d8914f] shrink-0 animate-pulse" />
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                Active Instrument · {currentInstrument.code}
+          {/* Telemetry Ticker + Replay Blueprints */}
+          <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto">
+            <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-2.5 text-xs shadow-sm">
+              <Radio className="h-4 w-4 text-[#d8914f] shrink-0" />
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Active Blueprint · {currentInstrument.code}
+                </div>
+                <div className="font-medium text-foreground">
+                  {currentInstrument.liveTelemetry}
+                </div>
               </div>
-              <div className="font-medium text-foreground">{currentInstrument.liveTelemetry}</div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => drawHandleRef.current?.replayAll()}
+              className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-2.5 font-mono text-[11px] font-medium text-foreground transition hover:border-primary/50 hover:text-primary"
+              title="Replay all GSAP DrawSVG blueprint animations"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Replay Sketches
+            </button>
           </div>
         </div>
 
-        {/* Responsive Grid: smooth horizontal snap strip on small mobile optional? No, crisp 1-col / 2-col / 3-col cards + tap-to-spool */}
-        <div className="mt-10 sm:mt-12 grid gap-4 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Mobile Quick Jump Strip (01..06) */}
+        <div className="mt-7 flex sm:hidden items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {INSTRUMENTS.map((inst, idx) => {
+              const active = inst.code === activeCode;
+              return (
+                <button
+                  key={inst.key}
+                  type="button"
+                  onClick={() => handleJumpMobile(inst.code, idx)}
+                  className={`shrink-0 cursor-pointer rounded-full px-3 py-1 font-mono text-[10.5px] font-medium transition ${
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border bg-card text-muted-foreground"
+                  }`}
+                >
+                  {inst.key} · 0{idx + 1}
+                </button>
+              );
+            })}
+          </div>
+          <span className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Swipe →
+          </span>
+        </div>
+
+        {/* Architectural Blueprint Grid (horizontal snap on mobile, 2/3-col grid on sm+/lg+) */}
+        <div
+          ref={railRef}
+          className="ml-sketches-rail mt-4 sm:mt-12 sm:grid sm:gap-5 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {INSTRUMENTS.map((item) => {
-            const IconSvg = item.Svg;
+            const BlueprintSvg = item.Svg;
             const isActive = item.code === activeCode;
             return (
-              <div
+              <figure
                 key={item.code}
-                data-active={isActive ? "true" : "false"}
                 onMouseEnter={() => setActiveCode(item.code)}
-                onClick={() => setActiveCode(item.code)}
-                className={`inst-card group relative flex flex-col justify-between rounded-3xl border p-5 sm:p-6 transition-all duration-300 cursor-pointer ${
+                onClick={(e) => handleSelectCard(item.code, e.currentTarget)}
+                className={`ml-sketch-card group relative flex flex-col justify-between rounded-3xl border p-4 sm:p-5 transition-all duration-300 cursor-pointer ${
                   isActive
-                    ? "border-primary/50 bg-card shadow-lg -translate-y-0.5"
-                    : "border-border bg-card/80 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg"
+                    ? "border-primary/55 bg-card shadow-lg sm:-translate-y-0.5"
+                    : "border-border bg-card/75 hover:border-primary/40 hover:bg-card hover:shadow-md"
                 }`}
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2">
+                  {/* Top Metadata Row */}
+                  <div className="flex items-center justify-between gap-2 px-1">
                     <span className="font-mono text-[10px] sm:text-[10.5px] uppercase tracking-[0.16em] text-muted-foreground">
-                      {item.code}
+                      <span className="ml-key-dot font-semibold text-foreground">
+                        {item.key}
+                      </span>
+                      — {item.code.split(" / ")[1]}
                     </span>
                     <span className="rounded-full bg-primary/12 px-2.5 py-0.5 font-mono text-[10px] font-medium text-primary">
                       {item.metric}
                     </span>
                   </div>
 
-                  {/* Animated SVG Stage */}
-                  <div className="relative my-5 flex items-center justify-center rounded-2xl border border-border/70 bg-background/85 py-4 sm:py-5 overflow-hidden">
-                    <div
-                      aria-hidden="true"
-                      className={`pointer-events-none absolute inset-0 transition-opacity duration-500 bg-[radial-gradient(circle_at_center,rgba(46,124,82,0.12),transparent_70%)] ${
-                        isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                      }`}
-                    />
-                    <IconSvg className="relative h-24 w-24 sm:h-28 sm:w-28 transition-transform duration-500 group-hover:scale-105" />
+                  {/* Motion Lab 360×260 Blueprint Canvas */}
+                  <div className="ml-sketch-stage my-3.5 overflow-hidden rounded-2xl p-2 sm:p-2.5 transition-colors group-hover:border-primary/35">
+                    <BlueprintSvg className="w-full h-auto" />
                   </div>
 
-                  <h3 className="font-serif text-xl sm:text-2xl font-semibold text-foreground">
-                    {item.title}
-                  </h3>
-                  <p className="mt-2 text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                    {item.detail}
-                  </p>
+                  {/* Narrative */}
+                  <figcaption className="px-1">
+                    <h3 className="font-serif text-xl sm:text-2xl font-semibold text-foreground leading-snug">
+                      {item.title}
+                    </h3>
+                    <p className="mt-1.5 text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                      {item.detail}
+                    </p>
+                  </figcaption>
                 </div>
 
-                <div className="mt-5 flex items-center justify-between border-t border-border/70 pt-3.5">
+                {/* Footer Strip */}
+                <div className="mt-4 flex items-center justify-between border-t border-border/70 px-1 pt-3">
                   <span className="font-mono text-[10px] text-muted-foreground truncate pr-2">
                     {item.liveTelemetry}
                   </span>
@@ -259,7 +369,7 @@ export function ExpeditionInstruments() {
                     <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                   </TransitionLink>
                 </div>
-              </div>
+              </figure>
             );
           })}
         </div>
