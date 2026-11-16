@@ -1,9 +1,28 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import RidgelineDitherFooter from "@/components/ui/ridgeline-dither-footer";
+import {
+  DEFAULT_SITE_SETTINGS,
+  fetchSiteSettingsRemote,
+  readSiteSettingsLocal,
+} from "@/lib/firebase/site-settings";
 
 export function SiteFooter() {
+  const [waNumber, setWaNumber] = useState(DEFAULT_SITE_SETTINGS.whatsappNumber);
+
+  useEffect(() => {
+    const sync = () => setWaNumber(readSiteSettingsLocal().whatsappNumber);
+    sync();
+    window.addEventListener("kp-site-settings-updated", sync);
+    fetchSiteSettingsRemote()
+      .then((s) => setWaNumber(s.whatsappNumber))
+      .catch(() => undefined);
+    return () => window.removeEventListener("kp-site-settings-updated", sync);
+  }, []);
+
+  const waHref = `https://wa.me/${waNumber.replace(/[^0-9]/g, "") || "255792867427"}`;
+
   return (
     <RidgelineDitherFooter
       preset="auto"
@@ -33,7 +52,7 @@ export function SiteFooter() {
             { label: "Plan Custom Safari", href: "/inquire", badge: "2026–27" },
             { label: "KPAP Porter Charter", href: "/kilimanjaro#kpap" },
             { label: "Migration Calendar", href: "/#seasons" },
-            { label: "WhatsApp Concierge", href: "https://wa.me/255792867427" },
+            { label: "WhatsApp Concierge", href: waHref },
           ],
         },
         {

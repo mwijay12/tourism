@@ -2,9 +2,15 @@
 
 import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Menu, Moon, Sun, X, Compass } from "lucide-react";
+import { Menu, Moon, Sun, X, Compass, ArrowUpRight } from "lucide-react";
 import { TransitionLink } from "@/components/creative/transition-provider";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_SITE_SETTINGS,
+  fetchSiteSettingsRemote,
+  readSiteSettingsLocal,
+  type SiteControlSettings,
+} from "@/lib/firebase/site-settings";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", curtain: "KIBO & PLAINS · OVERVIEW" },
@@ -19,6 +25,20 @@ export function SiteNavbar() {
   const [isDark, setIsDark] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [eatTime, setEatTime] = useState("15:40 EAT");
+  const [siteSettings, setSiteSettings] =
+    useState<SiteControlSettings>(DEFAULT_SITE_SETTINGS);
+
+  useEffect(() => {
+    setSiteSettings(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(setSiteSettings).catch(() => undefined);
+    const onUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<SiteControlSettings>).detail;
+      if (detail) setSiteSettings(detail);
+    };
+    window.addEventListener("kp-site-settings-updated", onUpdate);
+    return () =>
+      window.removeEventListener("kp-site-settings-updated", onUpdate);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 36);
@@ -54,10 +74,20 @@ export function SiteNavbar() {
   };
 
   return (
-    <header className="fixed inset-x-0 top-0 z-[100] px-4 sm:px-6 pt-4 pointer-events-none">
+    <header className="fixed inset-x-0 top-0 z-[100] px-4 sm:px-6 pt-3 pointer-events-none flex flex-col items-center gap-2">
+      {siteSettings.announcementEnabled && siteSettings.announcementText && (
+        <TransitionLink
+          href={siteSettings.announcementHref || "/inquire"}
+          className="pointer-events-auto inline-flex max-w-[1160px] items-center gap-2 rounded-full border border-[#e5a853]/40 bg-[#08100c]/90 px-4 py-1 font-mono text-[10px] sm:text-[11px] text-white shadow-md backdrop-blur-md hover:border-[#e5a853]"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-[#e5a853] animate-pulse shrink-0" />
+          <span className="truncate">{siteSettings.announcementText}</span>
+          <ArrowUpRight className="h-3 w-3 text-[#e5a853] shrink-0" />
+        </TransitionLink>
+      )}
       <div
         className={cn(
-          "pointer-events-auto mx-auto flex max-w-[1200px] items-center justify-between rounded-full border px-4 sm:px-6 py-2.5 transition-all duration-500",
+          "pointer-events-auto w-full mx-auto flex max-w-[1200px] items-center justify-between rounded-full border px-4 sm:px-6 py-2.5 transition-all duration-500",
           scrolled
             ? "border-border/80 bg-background/85 text-foreground shadow-lg backdrop-blur-xl"
             : "border-white/20 bg-black/35 text-white backdrop-blur-md"

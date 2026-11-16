@@ -1,9 +1,14 @@
 "use client";
 
-import React, { Suspense, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { KILIMANJARO_ROUTES, NATIONAL_PARKS } from "@/lib/tanzania-data";
 import { getFirebaseServices, isFirebaseConfigured } from "@/lib/firebase/client";
+import {
+  DEFAULT_SITE_SETTINGS,
+  fetchSiteSettingsRemote,
+  readSiteSettingsLocal,
+} from "@/lib/firebase/site-settings";
 import { addDoc, collection } from "firebase/firestore";
 import { Check, Compass, Loader2, MessageCircle, Mountain, Send, ShieldCheck } from "lucide-react";
 import { TransitionLink } from "@/components/creative/transition-provider";
@@ -47,6 +52,22 @@ function InquireConfigurator() {
     mailSent: boolean;
     savedCloud: boolean;
   } | null>(null);
+  const [sitePhone, setSitePhone] = useState(
+    DEFAULT_SITE_SETTINGS.whatsappNumber
+  );
+  const [seasonalMod, setSeasonalMod] = useState(0);
+
+  useEffect(() => {
+    const local = readSiteSettingsLocal();
+    setSitePhone(local.whatsappNumber);
+    setSeasonalMod(local.seasonalModifierPct);
+    fetchSiteSettingsRemote()
+      .then((s) => {
+        setSitePhone(s.whatsappNumber);
+        setSeasonalMod(s.seasonalModifierPct);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const togglePark = (slug: string) => {
     setSelectedParks((prev) =>
@@ -60,9 +81,10 @@ function InquireConfigurator() {
     const totalDays = kiliDays + safariDays;
     const dailyRate = tier === "Ultra-Luxury Fly-In" ? 960 : 590;
     const kiliBase = kiliDays * 410;
-    const perPerson = Math.round(kiliBase + safariDays * dailyRate);
+    const rawPerPerson = kiliBase + safariDays * dailyRate;
+    const perPerson = Math.round(rawPerPerson * (1 + (seasonalMod || 0) / 100));
     return { totalDays, perPerson };
-  }, [focus, kiliRoute, selectedParks.length, tier]);
+  }, [focus, kiliRoute, seasonalMod, selectedParks.length, tier]);
 
   const handleSubmitInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -361,7 +383,7 @@ function InquireConfigurator() {
                 )}
               </button>
               <a
-                href={`https://wa.me/255792867427?text=${encodeURIComponent(
+                href={`https://wa.me/${sitePhone.replace(/[^0-9]/g, "") || "255792867427"}?text=${encodeURIComponent(
                   `Habari Kibo & Plains / Altraware! I'm planning a ${estimate.totalDays}-day Tanzania expedition (${focus}) for ${travelers} guests in ${month} 2027 (${tier}).`
                 )}`}
                 target="_blank"

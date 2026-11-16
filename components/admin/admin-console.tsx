@@ -38,6 +38,13 @@ import {
   type InvoiceDraft,
   type InvoiceLineItem,
 } from "@/lib/firebase/admin-types";
+import {
+  DEFAULT_SITE_SETTINGS,
+  fetchSiteSettingsRemote,
+  readSiteSettingsLocal,
+  saveSiteSettingsRemote,
+  type SiteControlSettings,
+} from "@/lib/firebase/site-settings";
 import { formatMoney, generateInvoicePdf } from "@/lib/pdf/generate-invoice-pdf";
 import { TransitionLink } from "@/components/creative/transition-provider";
 import {
@@ -51,10 +58,12 @@ import {
   Copy,
   Database,
   Download,
+  ExternalLink,
   Eye,
   EyeOff,
   FileCode2,
   FileText,
+  Globe,
   Image as ImageIcon,
   Inbox,
   KeyRound,
@@ -63,15 +72,19 @@ import {
   LogOut,
   Mail,
   Menu,
+  Moon,
   Mountain,
   Plus,
   Receipt,
   RefreshCw,
+  RotateCcw,
   Search,
   Send,
   ShieldAlert,
   ShieldCheck,
+  Sliders,
   Sparkles,
+  Sun,
   Trash2,
   Upload,
   Users,
@@ -82,12 +95,51 @@ gsap.registerPlugin(DrawSVGPlugin);
 
 type AdminTab =
   | "overview"
+  | "site"
   | "clients"
   | "invoices"
-  | "expeditions"
   | "inquiries"
+  | "expeditions"
   | "media"
   | "setup";
+
+const TIMBRE_ADMIN_CSS = `
+@keyframes kp-brand-bars {
+  from { transform: scaleY(0.55); }
+  to { transform: scaleY(1); }
+}
+@keyframes kp-live-ping {
+  0% { transform: scale(0.5); opacity: 0.75; }
+  70%, 100% { transform: scale(2.1); opacity: 0; }
+}
+@keyframes kp-orb-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-44px, 56px, 0) scale(1.12); }
+}
+@keyframes kp-orb-b {
+  from { transform: translate3d(0, 0, 0) scale(1.04); }
+  to { transform: translate3d(56px, -38px, 0) scale(0.94); }
+}
+.kp-brand-bar {
+  transform-origin: bottom;
+  animation: kp-brand-bars 1.7s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+.kp-live-ping::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+  animation: kp-live-ping 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.kp-orb-a { animation: kp-orb-a 24s ease-in-out infinite alternate; }
+.kp-orb-b { animation: kp-orb-b 30s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) {
+  .kp-brand-bar, .kp-live-ping::after, .kp-orb-a, .kp-orb-b {
+    animation: none !important;
+  }
+}
+`;
 
 const ENV_TEMPLATE = `# Admin Passcode Gate (override default build passcode)
 ADMIN_ACCESS_PASSWORD=your_strong_admin_password
@@ -124,6 +176,10 @@ service cloud.firestore {
       return request.auth != null &&
         request.auth.token.email in ['you@gmail.com'];
     }
+    match /site_config/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
     match /expeditions/{id} {
       allow read: if resource.data.published == true || isAdmin();
       allow write: if isAdmin();
@@ -153,20 +209,22 @@ const HEATMAP_MATRIX = [
 const NAV_ITEMS: {
   id: AdminTab;
   label: string;
-  group: "WORKSPACE" | "OPERATIONS" | "STUDIO";
+  group: "WORKSPACE" | "SITE & CMS" | "OPERATIONS" | "STUDIO";
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
   { id: "overview", label: "Overview", group: "WORKSPACE", icon: LayoutDashboard },
   { id: "clients", label: "Clients & Portal", group: "WORKSPACE", icon: Users },
+  { id: "site", label: "Site Controls", group: "SITE & CMS", icon: Sliders },
+  { id: "expeditions", label: "Expeditions", group: "SITE & CMS", icon: Mountain },
   { id: "invoices", label: "Invoices & PDF", group: "OPERATIONS", icon: Receipt },
   { id: "inquiries", label: "Inquiries & Mail", group: "OPERATIONS", icon: Inbox },
-  { id: "expeditions", label: "Expeditions", group: "OPERATIONS", icon: Mountain },
   { id: "media", label: "Cloudinary Media", group: "STUDIO", icon: ImageIcon },
   { id: "setup", label: "Keys & Rules", group: "STUDIO", icon: FileCode2 },
 ];
 
 export function AdminConsole() {
   const dashShellRef = useRef<HTMLDivElement | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const cursorGlowRef = useRef<HTMLDivElement | null>(null);
   const splinePathRef = useRef<SVGPathElement | null>(null);
 
@@ -180,8 +238,11 @@ export function AdminConsole() {
 
   const [tab, setTab] = useState<AdminTab>("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
+  const [isDark, setIsDark] = useState(false);
+  const [eatTime, setEatTime] = useState("15:40 EAT");
 
   const [health, setHealth] = useState<IntegrationHealth>({
     firebase: isFirebaseConfigured,
@@ -191,6 +252,10 @@ export function AdminConsole() {
     passcodeConfigured: false,
     previewPasscodeHint: "kibo2026",
   });
+
+  const [siteSettings, setSiteSettings] =
+    useState<SiteControlSettings>(DEFAULT_SITE_SETTINGS);
+  const [savingSite, setSavingSite] = useState(false);
 
   const [expeditions, setExpeditions] =
     useState<AdminExpeditionItem[]>(SEED_EXPEDITIONS);
@@ -328,8 +393,11 @@ export function AdminConsole() {
           )
         );
       }
+
+      const remoteSite = await fetchSiteSettingsRemote();
+      setSiteSettings(remoteSite);
     } catch {
-      // rules or fresh empty collections
+      // fresh collections
     } finally {
       setSyncingDb(false);
     }
@@ -338,6 +406,25 @@ export function AdminConsole() {
   useEffect(() => {
     refreshHealth();
     loadCloudinaryMedia();
+    setSiteSettings(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(setSiteSettings).catch(() => undefined);
+
+    setIsDark(document.documentElement.classList.contains("dark"));
+    const updateClock = () => {
+      try {
+        const fmt = new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Africa/Dar_es_Salaam",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).format(new Date());
+        setEatTime(`${fmt} EAT`);
+      } catch {
+        setEatTime("EAT UTC+3");
+      }
+    };
+    updateClock();
+    const t = setInterval(updateClock, 30000);
 
     try {
       if (window.sessionStorage.getItem("kp_admin_pass_ok") === "1") {
@@ -350,7 +437,7 @@ export function AdminConsole() {
     const fb = getFirebaseServices();
     if (!fb) {
       setAuthLoading(false);
-      return;
+      return () => clearInterval(t);
     }
 
     const unsub = onAuthStateChanged(fb.auth, (currentUser) => {
@@ -360,13 +447,16 @@ export function AdminConsole() {
         loadFirestoreCollections();
       }
     });
-    return () => unsub();
+    return () => {
+      clearInterval(t);
+      unsub();
+    };
   }, [loadCloudinaryMedia, loadFirestoreCollections, refreshHealth]);
 
   const isGoogleAdmin = Boolean(user && isAuthorizedAdminEmail(user.email));
   const unlocked = isGoogleAdmin || passcodeUnlocked;
 
-  // Timbre-style ambient cursor glow & ⌘K Command Palette hotkey
+  // Sidebar entrance animation + Cursor Glow + ⌘K Command Palette
   useEffect(() => {
     if (!unlocked) return;
 
@@ -383,16 +473,38 @@ export function AdminConsole() {
         setPaletteOpen(true);
       } else if (e.key === "Escape") {
         setPaletteOpen(false);
+        setAccountMenuOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
 
-    const fine = window.matchMedia("(pointer: fine)").matches;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const glow = cursorGlowRef.current;
+    const sidebar = sidebarRef.current;
+    let sbCtx: gsap.Context | null = null;
+    if (sidebar && !reduced) {
+      sbCtx = gsap.context(() => {
+        gsap.fromTo(
+          ".kp-sb-item",
+          { x: -16, opacity: 0 },
+          {
+            x: 0,
+            opacity: 1,
+            duration: 0.5,
+            stagger: 0.04,
+            ease: "power3.out",
+            clearProps: "transform",
+          }
+        );
+      }, sidebar);
+    }
 
+    const fine = window.matchMedia("(pointer: fine)").matches;
+    const glow = cursorGlowRef.current;
     if (!fine || reduced || !glow) {
-      return () => window.removeEventListener("keydown", onKeyDown);
+      return () => {
+        window.removeEventListener("keydown", onKeyDown);
+        sbCtx?.revert();
+      };
     }
 
     const qx = gsap.quickTo(glow, "x", { duration: 0.42, ease: "power3.out" });
@@ -405,10 +517,11 @@ export function AdminConsole() {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("pointermove", onMove);
+      sbCtx?.revert();
     };
   }, [unlocked]);
 
-  // Timbre-style GSAP reveal + bar scale + SVG spline draw + ring animations on tab change
+  // GSAP content reveal + bars + SVG draw + rings on tab change
   useEffect(() => {
     if (!unlocked) return;
     const root = dashShellRef.current;
@@ -424,7 +537,7 @@ export function AdminConsole() {
           opacity: 1,
           y: 0,
           duration: 0.56,
-          stagger: 0.055,
+          stagger: 0.05,
           ease: "power3.out",
           clearProps: "transform",
         }
@@ -444,12 +557,12 @@ export function AdminConsole() {
 
       gsap.fromTo(
         "[data-dash-heat]",
-        { opacity: 0, scale: 0.5 },
+        { opacity: 0, scale: 0.45 },
         {
           opacity: 1,
           scale: 1,
-          duration: 0.35,
-          stagger: 0.006,
+          duration: 0.32,
+          stagger: 0.005,
           ease: "back.out(1.6)",
         }
       );
@@ -462,7 +575,7 @@ export function AdminConsole() {
           {
             drawSVG: `0% ${target}%`,
             duration: 1.05,
-            delay: 0.1 + idx * 0.12,
+            delay: 0.08 + idx * 0.12,
             ease: "power3.out",
           }
         );
@@ -472,13 +585,19 @@ export function AdminConsole() {
         gsap.fromTo(
           splinePathRef.current,
           { drawSVG: "0% 0%" },
-          { drawSVG: "0% 100%", duration: 1.1, ease: "power2.out" }
+          { drawSVG: "0% 100%", duration: 1.05, ease: "power2.out" }
         );
       }
     }, root);
 
     return () => ctx.revert();
   }, [tab, unlocked]);
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle("dark", next);
+  };
 
   const handlePasscodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -500,10 +619,10 @@ export function AdminConsole() {
         } catch {
           // ignore
         }
-        notify("Welcome to Kibo & Plains Mission Control!");
+        notify("Welcome to Kibo & Plains Studio!");
       }
     } catch {
-      setAuthError("Unable to verify passcode right now.");
+      setAuthError("Unable to verify passcode.");
     } finally {
       setPasscodeChecking(false);
     }
@@ -514,7 +633,7 @@ export function AdminConsole() {
     const fb = getFirebaseServices();
     if (!fb) {
       setAuthError(
-        "Firebase keys are not set yet — use the Admin Passcode right below or paste NEXT_PUBLIC_FIREBASE_* into Vercel."
+        "Firebase keys not set yet — use the Admin Passcode right below or paste NEXT_PUBLIC_FIREBASE_* in Vercel."
       );
       return;
     }
@@ -539,6 +658,7 @@ export function AdminConsole() {
     const fb = getFirebaseServices();
     if (fb) await signOut(fb.auth);
     setPasscodeUnlocked(false);
+    setAccountMenuOpen(false);
     try {
       window.sessionStorage.removeItem("kp_admin_pass_ok");
     } catch {
@@ -547,21 +667,44 @@ export function AdminConsole() {
     setUser(null);
   };
 
+  const handleSaveSiteSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSite(true);
+    const payload: SiteControlSettings = {
+      ...siteSettings,
+      updatedAt: new Date().toISOString().slice(0, 10),
+    };
+    const res = await saveSiteSettingsRemote(payload);
+    setSavingSite(false);
+    notify(
+      res.cloudSaved
+        ? "Live site controls published to Firestore & active!"
+        : "Live site controls applied (active across your browser; connect Firebase to publish globally)."
+    );
+  };
+
+  const handleResetSiteSettings = async () => {
+    setSiteSettings(DEFAULT_SITE_SETTINGS);
+    await saveSiteSettingsRemote(DEFAULT_SITE_SETTINGS);
+    notify("Restored default site configuration.");
+  };
+
   const handleSeedToFirestore = async () => {
     const fb = getFirebaseServices();
     if (!fb || !user) {
-      notify("Connect Firebase & sign in with Google to push live data to Firestore.");
+      notify("Connect Firebase & sign in with Google to push live data.");
       return;
     }
     setSyncingDb(true);
     try {
+      await saveSiteSettingsRemote(siteSettings);
       for (const item of expeditions) {
         await setDoc(doc(fb.db, "expeditions", item.id), item);
       }
       for (const cli of clients) {
         await setDoc(doc(fb.db, "clients", cli.id), cli);
       }
-      notify("Expeditions & Client Workspaces synced to Firestore!");
+      notify("Site config, Expeditions & Clients synced to Firestore!");
     } catch (err) {
       notify(err instanceof Error ? err.message : "Firestore write failed.");
     } finally {
@@ -593,7 +736,7 @@ export function AdminConsole() {
       paidUsd: 0,
       welcomeSent: false,
       invoiceNumber: invNo,
-      notes: "Created from Admin Operations Console.",
+      notes: "Created from Kibo Studio Console.",
       createdAt: new Date().toISOString().slice(0, 10),
     };
 
@@ -653,7 +796,7 @@ export function AdminConsole() {
       if (!res.ok || !json.ok) {
         notify(
           json.error ||
-            "SMTP credentials needed in .env to email live (preview template ready in Mail tab)."
+            "SMTP credentials needed in .env to email live (preview template ready)."
         );
       } else {
         setClients((prev) =>
@@ -704,7 +847,6 @@ export function AdminConsole() {
     e.target.value = "";
   };
 
-  // Invoice Computations
   const invoiceTotals = useMemo(() => {
     const subtotal = invoiceDraft.items.reduce(
       (sum, item) => sum + item.qty * item.unitPriceUsd,
@@ -805,7 +947,7 @@ export function AdminConsole() {
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
-        notify(json.error || "Configure SMTP keys in .env to email invoice directly.");
+        notify(json.error || "Configure SMTP keys in .env to email invoice.");
       } else {
         notify(`Invoice emailed to ${invoiceDraft.clientEmail}!`);
       }
@@ -962,19 +1104,21 @@ export function AdminConsole() {
       <div className="min-h-screen grid place-items-center bg-[#08100c] text-[#e2eee7]">
         <div className="flex items-center gap-3 font-mono text-xs">
           <Loader2 className="h-4 w-4 animate-spin text-[#e5a853]" />
-          Loading Kibo &amp; Plains Command...
+          Loading Kibo Studio...
         </div>
       </div>
     );
   }
 
   // =========================================================================
-  // 1. TIMBRE-STYLE SPLIT AUTH SHOWCASE + PASSWORD GATE + GOOGLE OAUTH
+  // 1. STANDALONE TIMBRE-STYLE SPLIT AUTH SHOWCASE (ZERO WEBSITE HEADER/FOOTER)
   // =========================================================================
   if (!unlocked) {
     return (
-      <div className="min-h-screen grid lg:grid-cols-[1.08fr_0.92fr] bg-[#08100c] text-[#e2eee7] pt-16 sm:pt-0">
-        {/* Left Showcase Panel (matches Timbre Studio dark showcase craft) */}
+      <div className="min-h-screen grid lg:grid-cols-[1.08fr_0.92fr] bg-[#08100c] text-[#e2eee7]">
+        <style>{TIMBRE_ADMIN_CSS}</style>
+
+        {/* Left Showcase Panel */}
         <section className="relative flex flex-col justify-between overflow-hidden px-6 py-10 sm:px-12 sm:py-14 bg-[radial-gradient(circle_at_82%_4%,rgba(229,168,83,0.22),transparent_36%),radial-gradient(circle_at_12%_92%,rgba(46,124,82,0.24),transparent_44%),linear-gradient(155deg,#102319,#070f0b_68%)]">
           <div
             aria-hidden="true"
@@ -988,9 +1132,26 @@ export function AdminConsole() {
             }}
           />
 
-          <div className="relative z-10 flex items-center gap-3 font-serif text-2xl font-semibold text-white">
-            <Mountain className="h-6 w-6 text-[#e5a853]" />
-            Kibo &amp; Plains Studio
+          <div className="relative z-10 flex items-center gap-3">
+            {/* Timbre-style animated equalizer/ridge mark */}
+            <span
+              aria-hidden="true"
+              className="relative inline-flex items-end gap-[3px] h-7 w-7 p-1.5 rounded-lg bg-white/10 border border-white/10"
+            >
+              <i className="kp-brand-bar w-[3px] h-2 rounded-full bg-white" />
+              <i
+                className="kp-brand-bar w-[3px] h-3.5 rounded-full bg-white"
+                style={{ animationDelay: "-0.45s" }}
+              />
+              <i
+                className="kp-brand-bar w-[3px] h-2.5 rounded-full bg-white"
+                style={{ animationDelay: "-0.8s" }}
+              />
+              <b className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-[#e5a853]" />
+            </span>
+            <span className="font-serif text-2xl font-semibold text-white tracking-tight">
+              kibo studio<span className="text-[#e5a853]">.</span>
+            </span>
           </div>
 
           <div className="relative z-10 my-10 max-w-xl">
@@ -1002,15 +1163,15 @@ export function AdminConsole() {
               <span className="italic text-[#e5a853]">One clear signal.</span>
             </h1>
             <p className="mt-4 text-sm sm:text-base text-white/75 leading-relaxed">
-              Manage Kilimanjaro permits, client itineraries, custom PDF invoices with partner logos, Cloudinary photography, and Nodemailer VIP welcomes from one calm workspace.
+              Full control over your live Tanzania website, client portal workspaces, branded PDF invoices with partner logos, Cloudinary photography, and Nodemailer VIP welcomes.
             </p>
           </div>
 
-          {/* Live Signal Preview Card (inspired by Timbre login signal card) */}
+          {/* Live Signal Card */}
           <div className="relative z-10 max-w-md rounded-3xl border border-white/15 bg-black/45 p-5 backdrop-blur-xl shadow-2xl">
             <div className="flex items-center justify-between text-xs">
               <span className="inline-flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-wider text-[#62b388]">
-                <span className="h-2 w-2 rounded-full bg-[#62b388] animate-pulse" />
+                <span className="relative inline-block h-2 w-2 rounded-full bg-[#62b388] kp-live-ping" />
                 Live Expedition Signal
               </span>
               <span className="rounded-full border border-white/15 px-2.5 py-0.5 font-mono text-[10px] text-white/70">
@@ -1060,12 +1221,11 @@ export function AdminConsole() {
               </h2>
               <p className="mt-1.5 text-sm text-muted-foreground">
                 {authRoleTab === "admin"
-                  ? "Use Google Auth (Firebase) or enter your admin passcode to inspect the full animated dashboard."
+                  ? "Use Google Auth (Firebase) or enter your admin passcode to open the full standalone studio."
                   : "Travelers sign in with Google to view their itinerary, crew notes, and PDF cost invoices."}
               </p>
             </div>
 
-            {/* Mode Switch */}
             <div className="grid grid-cols-2 rounded-full border border-border bg-card p-1">
               <button
                 type="button"
@@ -1093,7 +1253,6 @@ export function AdminConsole() {
 
             {authRoleTab === "admin" ? (
               <>
-                {/* Google Auth Button */}
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}
@@ -1116,7 +1275,6 @@ export function AdminConsole() {
                   <div className="flex-grow border-t border-border" />
                 </div>
 
-                {/* Admin Passcode Form */}
                 <form onSubmit={handlePasscodeSubmit} className="space-y-3">
                   <div className="relative">
                     <KeyRound className="absolute left-3.5 top-3.5 h-4 w-4 text-muted-foreground" />
@@ -1139,7 +1297,7 @@ export function AdminConsole() {
                     ) : (
                       <ShieldCheck className="h-4 w-4" />
                     )}
-                    Unlock Admin Dashboard
+                    Unlock Studio Workspace
                   </button>
                 </form>
 
@@ -1163,7 +1321,7 @@ export function AdminConsole() {
             ) : (
               <div className="rounded-3xl border border-border bg-card p-6 space-y-4">
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Clients can sign in with their invited Google account on the dedicated Client Portal to track trip readiness, KPAP crew notes, and download branded PDF cost invoices.
+                  Clients can sign in with their invited Google account on the standalone Client Portal to track trip readiness, KPAP crew notes, and download branded PDF cost invoices.
                 </p>
                 <TransitionLink
                   href="/portal"
@@ -1175,34 +1333,12 @@ export function AdminConsole() {
                 </TransitionLink>
               </div>
             )}
-
-            {/* Integration Readiness Strip */}
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              {[
-                { label: "Firebase Auth", ok: health.firebase },
-                { label: "Cloudinary CDN", ok: health.cloudinary },
-                { label: "Nodemailer SMTP", ok: health.nodemailer },
-                { label: "PDF Invoice Studio", ok: true },
-              ].map((s) => (
-                <div
-                  key={s.label}
-                  className="flex items-center justify-between rounded-xl border border-border bg-card/70 px-3 py-2 font-mono text-[10.5px]"
-                >
-                  <span>{s.label}</span>
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      s.ok ? "bg-emerald-500" : "bg-[#e5a853]"
-                    }`}
-                  />
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="mx-auto w-full max-w-md pt-6 flex items-center justify-between font-mono text-[11px] text-muted-foreground">
-            <span>Kibo &amp; Plains · Arusha</span>
+            <span>Kibo &amp; Plains Studio</span>
             <TransitionLink href="/" className="hover:underline">
-              ← Back to Website
+              ← Return to Public Site
             </TransitionLink>
           </div>
         </section>
@@ -1211,32 +1347,41 @@ export function AdminConsole() {
   }
 
   // =========================================================================
-  // 2. TIMBRE-STYLE ANIMATED DASHBOARD SHELL (SIDEBAR + TOPBAR + ⌘K + MOTION)
+  // 2. STANDALONE TIMBRE-STYLE DASHBOARD SHELL (FIXED DARK SIDEBAR + TOPBAR)
   // =========================================================================
   return (
     <div
       ref={dashShellRef}
-      className="relative min-h-screen bg-background text-foreground pt-20 pb-16"
+      className="relative min-h-screen bg-background text-foreground"
     >
-      {/* Ambient Timbre-style soft pointer glow */}
+      <style>{TIMBRE_ADMIN_CSS}</style>
+
+      {/* Ambient Blurred Orbs + Subtle Cursor Glow */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+      >
+        <span className="kp-orb-a absolute -top-52 -right-36 h-[520px] w-[520px] rounded-full bg-[#2e7c52]/12 blur-[90px]" />
+        <span className="kp-orb-b absolute -bottom-48 left-[24%] h-[460px] w-[460px] rounded-full bg-[#e5a853]/12 blur-[90px]" />
+      </div>
       <div
         ref={cursorGlowRef}
         aria-hidden="true"
-        className="pointer-events-none fixed -top-52 -left-52 z-0 hidden lg:block h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(46,124,82,0.12)_0%,rgba(229,168,83,0.06)_40%,transparent_72%)] blur-2xl"
+        className="pointer-events-none fixed -top-52 -left-52 z-0 hidden lg:block h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(46,124,82,0.12)_0%,rgba(229,168,83,0.07)_42%,transparent_72%)] blur-2xl"
       />
 
       {/* Toast */}
       {toast && (
-        <div className="fixed top-20 right-4 z-[150] flex items-center gap-2 rounded-full border border-primary/40 bg-[#08100c] px-4 py-2.5 text-xs font-medium text-white shadow-2xl">
+        <div className="fixed top-20 right-5 z-[180] flex items-center gap-2 rounded-full border border-primary/40 bg-[#08100c] px-4 py-2.5 text-xs font-medium text-white shadow-2xl">
           <CheckCircle2 className="h-4 w-4 text-[#e5a853]" />
           {toast}
         </div>
       )}
 
-      {/* ⌘K Command Palette Modal */}
+      {/* ⌘K Command Palette */}
       {paletteOpen && (
         <div
-          className="fixed inset-0 z-[180] grid place-items-start justify-center bg-black/60 p-4 pt-24 backdrop-blur-sm"
+          className="fixed inset-0 z-[200] grid place-items-start justify-center bg-black/60 p-4 pt-24 backdrop-blur-sm"
           onClick={() => setPaletteOpen(false)}
         >
           <div
@@ -1249,7 +1394,7 @@ export function AdminConsole() {
                 autoFocus
                 value={paletteQuery}
                 onChange={(e) => setPaletteQuery(e.target.value)}
-                placeholder="Jump to Overview, Clients, Invoices PDF, Cloudinary..."
+                placeholder="Jump to Site Controls, Clients, PDF Invoices, Cloudinary..."
                 className="flex-1 bg-transparent text-sm outline-none"
               />
               <button
@@ -1289,1587 +1434,1982 @@ export function AdminConsole() {
         </div>
       )}
 
-      <div className="relative z-10 mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[264px_1fr] lg:items-start">
-          {/* Desktop Floating Dark Sidebar (Timbre Studio signature) */}
-          <aside className="hidden lg:flex sticky top-24 flex-col justify-between rounded-3xl border border-white/10 bg-[#0b1711] p-4 text-[#e2eee7] shadow-2xl min-h-[calc(100vh-7.5rem)]">
-            <div>
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-3">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[#2e7c52] to-[#e5a853] font-serif text-lg font-bold text-[#08100c]">
-                    KP
-                  </span>
-                  <div>
-                    <div className="text-sm font-semibold text-white">
-                      Kibo Studio
-                    </div>
-                    <div className="font-mono text-[10px] text-white/60">
-                      {isGoogleAdmin ? "Firebase Live" : "Passcode Session"}
-                    </div>
-                  </div>
-                </div>
-                <span className="rounded-full bg-[#e5a853]/20 px-2 py-0.5 font-mono text-[9.5px] font-semibold text-[#e5a853]">
-                  PRO
-                </span>
-              </div>
+      {/* Mobile Scrim */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
 
-              {(["WORKSPACE", "OPERATIONS", "STUDIO"] as const).map((group) => (
-                <div key={group} className="mt-5">
-                  <div className="px-3 font-mono text-[9.5px] uppercase tracking-[0.2em] text-white/45">
-                    {group}
-                  </div>
-                  <nav className="mt-1.5 space-y-1">
-                    {NAV_ITEMS.filter((n) => n.group === group).map((item) => {
-                      const Icon = item.icon;
-                      const active = tab === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setTab(item.id)}
-                          className={`w-full cursor-pointer flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-medium transition ${
-                            active
-                              ? "bg-[#1a3828] text-white shadow-sm"
-                              : "text-white/70 hover:bg-white/5 hover:text-white"
-                          }`}
-                        >
-                          <span className="flex items-center gap-2.5">
-                            <Icon
-                              className={`h-4 w-4 ${
-                                active ? "text-[#e5a853]" : "text-white/60"
-                              }`}
-                            />
-                            {item.label}
-                          </span>
-                          {active && (
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#e5a853]" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </nav>
-                </div>
-              ))}
+      {/* ================================================================= */}
+      {/* TIMBRE-STYLE FIXED FLOATING DARK SIDEBAR (272px, rounded-26px)     */}
+      {/* ================================================================= */}
+      <aside
+        ref={sidebarRef}
+        aria-label="Primary studio navigation"
+        className={`fixed top-3.5 bottom-3.5 left-3.5 z-[60] flex w-[272px] flex-col justify-between rounded-[26px] border border-white/10 bg-[radial-gradient(120%_60%_at_20%_0%,rgba(255,255,255,0.07),transparent_55%),linear-gradient(180deg,#12241b_0%,#08100c_100%)] p-4 text-[#e2eee7] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.65)] transition-transform duration-300 ease-out ${
+          mobileMenuOpen
+            ? "translate-x-0"
+            : "-translate-x-[115%] lg:translate-x-0"
+        }`}
+      >
+        <div className="overflow-y-auto pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* Sidebar Header + Animated Brand Mark */}
+          <div className="flex items-center justify-between px-2 pt-1 pb-4">
+            <div className="flex items-center gap-2.5">
+              <span
+                aria-hidden="true"
+                className="relative inline-flex items-end gap-[2.5px] h-7 w-7 p-1.5 rounded-lg bg-white/10 border border-white/10"
+              >
+                <i className="kp-brand-bar w-[3px] h-2 rounded-full bg-white" />
+                <i
+                  className="kp-brand-bar w-[3px] h-3.5 rounded-full bg-white"
+                  style={{ animationDelay: "-0.45s" }}
+                />
+                <i
+                  className="kp-brand-bar w-[3px] h-2.5 rounded-full bg-white"
+                  style={{ animationDelay: "-0.8s" }}
+                />
+                <b className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-[#e5a853]" />
+              </span>
+              <span className="font-serif text-xl font-semibold tracking-tight text-white">
+                kibo studio<span className="text-[#e5a853]">.</span>
+              </span>
             </div>
 
-            <div className="mt-6 space-y-2 border-t border-white/10 pt-4">
-              <TransitionLink
-                href="/portal"
-                label="CLIENT PORTAL"
-                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono text-[11px] text-white/80 hover:border-[#e5a853]/50"
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="lg:hidden cursor-pointer rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white"
+              aria-label="Close sidebar"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Operator / Workspace Card */}
+          <div className="kp-sb-item flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.055] p-2.5 mb-5">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#e5a853] to-[#2e7c52] text-xs font-bold text-[#08100c] shadow-inner">
+              KP
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-medium text-white">
+                Expedition Desk
+              </div>
+              <div className="truncate text-[11px] text-white/60">
+                Arusha · Moshi · TZ
+              </div>
+            </div>
+            <span className="rounded-full border border-[#e5a853]/30 bg-[#e5a853]/15 px-2 py-0.5 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-[#e5a853]">
+              Studio
+            </span>
+          </div>
+
+          {/* Grouped Animated Nav Links */}
+          {(["WORKSPACE", "SITE & CMS", "OPERATIONS", "STUDIO"] as const).map(
+            (group) => (
+              <div key={group} className="mt-4 first:mt-0">
+                <div className="px-2.5 mb-1.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                  {group}
+                </div>
+                <nav className="space-y-1">
+                  {NAV_ITEMS.filter((n) => n.group === group).map((item) => {
+                    const Icon = item.icon;
+                    const active = tab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setTab(item.id);
+                          setMobileMenuOpen(false);
+                        }}
+                        className={`kp-sb-item group w-full cursor-pointer flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200 active:scale-[0.985] ${
+                          active
+                            ? "bg-white/[0.095] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+                            : "text-white/65 hover:bg-white/[0.05] hover:text-white"
+                        }`}
+                      >
+                        <Icon
+                          className={`h-[17px] w-[17px] transition-colors ${
+                            active
+                              ? "text-[#e5a853]"
+                              : "text-white/60 group-hover:text-white"
+                          }`}
+                        />
+                        <span>{item.label}</span>
+                        <span
+                          className={`ml-auto h-1.5 w-1.5 rounded-full bg-[#e5a853] shadow-[0_0_8px_rgba(229,168,83,0.8)] transition-all duration-300 ${
+                            active
+                              ? "scale-100 opacity-100"
+                              : "scale-50 opacity-0"
+                          }`}
+                        />
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+            )
+          )}
+        </div>
+
+        {/* Sidebar Footer: Live Connection Status + Operator Profile */}
+        <div className="kp-sb-item mt-4 space-y-3 border-t border-white/10 pt-3.5">
+          <div className="px-1 space-y-2">
+            <div className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/45">
+              Integrations
+            </div>
+            {[
+              { name: "Firebase Auth", ok: health.firebase },
+              { name: "Cloudinary CDN", ok: health.cloudinary },
+              { name: "Nodemailer SMTP", ok: health.nodemailer },
+            ].map((src) => (
+              <div
+                key={src.name}
+                className="flex items-center gap-2 text-[11px] text-white/70"
               >
-                <span>Preview Client Portal</span>
-                <ArrowUpRight className="h-3.5 w-3.5 text-[#e5a853]" />
-              </TransitionLink>
+                <span
+                  className={`relative h-1.5 w-1.5 rounded-full ${
+                    src.ok
+                      ? "bg-[#62b388] kp-live-ping text-[#62b388]"
+                      : "bg-[#e5a853]"
+                  }`}
+                />
+                <span>{src.name}</span>
+                <span className="ml-auto font-mono text-[9.5px] text-white/45">
+                  {src.ok ? "live" : "ready"}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-2">
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((v) => !v)}
+              className="flex items-center gap-2.5 min-w-0 flex-1 text-left rounded-xl p-1 hover:bg-white/[0.06] cursor-pointer"
+            >
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#2e7c52] to-[#e5a853] text-[11px] font-bold text-[#08100c]">
+                {user?.displayName?.[0] || "A"}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-medium text-white">
+                  {isGoogleAdmin ? user?.displayName || "Admin" : "Preview Admin"}
+                </div>
+                <div className="truncate text-[10px] text-white/55">
+                  {user?.email || "Passcode session"}
+                </div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Open command palette"
+              className="cursor-pointer grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ================================================================= */}
+      {/* MAIN APPLICATION SHELL (OFFSET BY SIDEBAR ON DESKTOP)              */}
+      {/* ================================================================= */}
+      <div className="relative z-10 flex min-h-screen flex-col lg:pl-[300px]">
+        {/* Sticky Frosted Topbar */}
+        <header className="sticky top-0 z-40 h-16 border-b border-border/70 bg-background/80 backdrop-blur-xl">
+          <div className="mx-auto flex h-full max-w-[1440px] items-center justify-between gap-3 px-4 sm:px-8">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                className="lg:hidden cursor-pointer grid h-9 w-9 place-items-center rounded-xl border border-border bg-card"
+                aria-label="Open menu"
+              >
+                <Menu className="h-4 w-4" />
+              </button>
+
+              <div className="flex items-center gap-2.5 truncate">
+                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-primary">
+                  <span className="relative h-1.5 w-1.5 rounded-full bg-[#62b388] kp-live-ping text-[#62b388]" />
+                  {isGoogleAdmin ? "Cloud Live" : "Studio Mode"}
+                </span>
+                <span className="hidden sm:inline font-serif text-lg font-semibold truncate">
+                  {NAV_ITEMS.find((n) => n.id === tab)?.label}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 font-mono text-[10.5px] text-muted-foreground">
+                <Compass className="h-3 w-3 text-[#e5a853]" />
+                {eatTime}
+              </span>
 
               <button
                 type="button"
-                onClick={handleLogout}
-                className="w-full cursor-pointer flex items-center justify-between rounded-xl px-3 py-2 font-mono text-[11px] text-white/60 hover:bg-white/5 hover:text-white"
+                onClick={() => setPaletteOpen(true)}
+                className="cursor-pointer hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 font-mono text-[10.5px] text-muted-foreground hover:text-foreground"
               >
-                <span>{user?.email || "Admin Unlocked"}</span>
-                <LogOut className="h-3.5 w-3.5" />
+                <Command className="h-3 w-3" />K
               </button>
-            </div>
-          </aside>
 
-          {/* Main Dashboard Stage */}
-          <div className="space-y-6 min-w-0">
-            {/* Top Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border bg-card/90 px-4 sm:px-6 py-3.5 shadow-sm backdrop-blur-xl">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setMobileMenuOpen((v) => !v)}
-                  className="lg:hidden cursor-pointer rounded-full border border-border p-2"
-                >
-                  <Menu className="h-4 w-4" />
-                </button>
-                <div>
-                  <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
-                    Mission Control · {tab.toUpperCase()}
-                  </div>
-                  <h1 className="font-serif text-xl sm:text-2xl font-semibold leading-tight">
-                    {NAV_ITEMS.find((n) => n.id === tab)?.label}
-                  </h1>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaletteOpen(true)}
-                  className="cursor-pointer hidden sm:inline-flex items-center gap-2 rounded-full border border-border bg-background px-3.5 py-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  <Command className="h-3 w-3" />K Search
-                </button>
-
-                {isGoogleAdmin ? (
-                  <button
-                    type="button"
-                    onClick={loadFirestoreCollections}
-                    className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-1.5 text-xs font-medium"
-                  >
-                    <RefreshCw
-                      className={`h-3.5 w-3.5 ${syncingDb ? "animate-spin" : ""}`}
-                    />
-                    Sync Cloud
-                  </button>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label="Toggle light/dark theme"
+                className="cursor-pointer grid h-8 w-8 place-items-center rounded-full border border-border bg-card hover:bg-secondary"
+              >
+                {isDark ? (
+                  <Sun className="h-3.5 w-3.5" />
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handleGoogleSignIn}
-                    className="cursor-pointer inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground"
-                  >
-                    Link Google Auth
-                  </button>
+                  <Moon className="h-3.5 w-3.5" />
                 )}
+              </button>
 
+              <TransitionLink
+                href="/"
+                label="KIBO & PLAINS PUBLIC SITE"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 font-mono text-[11px] font-medium hover:bg-secondary"
+              >
+                <Globe className="h-3.5 w-3.5 text-primary" />
+                <span className="hidden sm:inline">Live Site</span>
+                <ExternalLink className="h-3 w-3" />
+              </TransitionLink>
+
+              <div className="relative">
                 <button
                   type="button"
-                  onClick={handleLogout}
-                  className="lg:hidden cursor-pointer rounded-full border border-border p-2"
-                  title="Sign out"
+                  onClick={() => setAccountMenuOpen((v) => !v)}
+                  className="cursor-pointer flex items-center gap-2 rounded-full border border-border bg-card pl-3 pr-1 py-1 hover:bg-secondary"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline font-mono text-[11px] font-medium">
+                    {isGoogleAdmin ? "Google" : "Admin"}
+                  </span>
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+                    {user?.displayName?.[0] || "K"}
+                  </span>
                 </button>
-              </div>
-            </div>
 
-            {/* Mobile Horizontal Tabs */}
-            <div
-              className={`lg:hidden flex items-center gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
-                mobileMenuOpen ? "flex-wrap" : ""
-              }`}
-            >
-              {NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const active = tab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setTab(item.id);
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`shrink-0 cursor-pointer inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium ${
-                      active
-                        ? "bg-primary text-primary-foreground"
-                        : "border border-border bg-card text-muted-foreground"
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* =========================================================== */}
-            {/* TAB: OVERVIEW (TIMBRE-STYLE ANIMATED CHARTS + RINGS + HEATMAP) */}
-            {/* =========================================================== */}
-            {tab === "overview" && (
-              <div className="space-y-6">
-                {/* 4 Animated KPI Cards */}
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  {[
-                    {
-                      label: "Projected Season Volume",
-                      value: "$39,920",
-                      delta: "+24.6%",
-                      sub: `${clients.length} active VIP dossiers`,
-                    },
-                    {
-                      label: "Client Portal Access",
-                      value: `${clients.filter((c) => c.welcomeSent).length} / ${clients.length}`,
-                      delta: "Google Ready",
-                      sub: "Branded welcome emails sent",
-                    },
-                    {
-                      label: "Summit Permits & Leads",
-                      value: String(inquiries.length),
-                      delta: `${inquiries.filter((i) => i.status === "new").length} New`,
-                      sub: "Linked with /inquire",
-                    },
-                    {
-                      label: "Media CDN Library",
-                      value: String(mediaAssets.length),
-                      delta: health.cloudinary ? "Cloudinary" : "Local Ready",
-                      sub: "Auto f_auto WebP delivery",
-                    },
-                  ].map((kpi) => (
-                    <div
-                      key={kpi.label}
-                      data-dash-reveal
-                      className="rounded-3xl border border-border bg-card p-5 shadow-sm transition hover:border-primary/40"
-                    >
-                      <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        <span>{kpi.label}</span>
-                        <span className="rounded-full bg-primary/15 px-2 py-0.5 text-primary font-semibold">
-                          {kpi.delta}
-                        </span>
+                {accountMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-60 rounded-2xl border border-border bg-card p-2 shadow-2xl z-50">
+                    <div className="px-3 py-2 border-b border-border">
+                      <div className="text-xs font-semibold">
+                        {isGoogleAdmin ? user?.displayName : "Preview Session"}
                       </div>
-                      <div className="mt-2 font-serif text-3xl sm:text-4xl font-semibold">
-                        {kpi.value}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {kpi.sub}
+                      <div className="text-[11px] text-muted-foreground truncate">
+                        {user?.email || "Unlocked via passcode"}
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                {/* Animated Monotone SVG Curve + Radial Goal Rings */}
-                <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
-                  <div
-                    data-dash-reveal
-                    className="rounded-3xl border border-border bg-card p-6 shadow-sm"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
-                          Booking Trajectory · Monotone Curve
-                        </span>
-                        <h2 className="mt-1 font-serif text-2xl font-semibold">
-                          Expedition Revenue &amp; Permits
-                        </h2>
-                      </div>
-                      <span className="rounded-full border border-border bg-background px-3 py-1 font-mono text-[10.5px]">
-                        2026–2027 Peak
-                      </span>
-                    </div>
-
-                    <div className="mt-5">
-                      <svg
-                        viewBox="0 0 640 180"
-                        className="w-full h-44 overflow-visible"
-                        fill="none"
-                      >
-                        <defs>
-                          <linearGradient id="dashSplineFill" x1="0" y1="0" x2="0" y2="180" gradientUnits="userSpaceOnUse">
-                            <stop offset="0%" stopColor="#2e7c52" stopOpacity="0.28" />
-                            <stop offset="100%" stopColor="#2e7c52" stopOpacity="0" />
-                          </linearGradient>
-                          <linearGradient id="dashSplineStroke" x1="0" y1="0" x2="640" y2="0" gradientUnits="userSpaceOnUse">
-                            <stop offset="0%" stopColor="#2e7c52" />
-                            <stop offset="60%" stopColor="#e5a853" />
-                            <stop offset="100%" stopColor="#62b388" />
-                          </linearGradient>
-                        </defs>
-
-                        {[35, 80, 125, 165].map((y) => (
-                          <line
-                            key={y}
-                            x1="0"
-                            y1={y}
-                            x2="640"
-                            y2={y}
-                            stroke="currentColor"
-                            className="text-border"
-                            strokeDasharray="4 6"
-                            strokeWidth="1"
-                          />
-                        ))}
-
-                        <path
-                          d="M 10 150 C 90 142, 130 98, 210 105 C 290 112, 330 56, 415 62 C 495 68, 540 22, 630 18 L 630 175 L 10 175 Z"
-                          fill="url(#dashSplineFill)"
-                        />
-
-                        <path
-                          ref={splinePathRef}
-                          d="M 10 150 C 90 142, 130 98, 210 105 C 290 112, 330 56, 415 62 C 495 68, 540 22, 630 18"
-                          stroke="url(#dashSplineStroke)"
-                          strokeWidth="3.2"
-                          strokeLinecap="round"
-                        />
-
-                        {[
-                          [10, 150, "Jan"],
-                          [210, 105, "Apr"],
-                          [415, 62, "Jul"],
-                          [630, 18, "Oct"],
-                        ].map(([cx, cy, label]) => (
-                          <g key={String(label)}>
-                            <circle
-                              cx={Number(cx)}
-                              cy={Number(cy)}
-                              r="4.5"
-                              fill="#e5a853"
-                              stroke="#08100c"
-                              strokeWidth="1.5"
-                            />
-                            <text
-                              x={Number(cx)}
-                              y="178"
-                              textAnchor="middle"
-                              fontSize="10"
-                              fill="currentColor"
-                              className="text-muted-foreground font-mono"
-                            >
-                              {label}
-                            </text>
-                          </g>
-                        ))}
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* Animated Radial Progress Rings */}
-                  <div
-                    data-dash-reveal
-                    className="rounded-3xl border border-border bg-card p-6 shadow-sm flex flex-col justify-between"
-                  >
-                    <div>
-                      <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
-                        Live Operations Gauges
-                      </span>
-                      <h2 className="mt-1 font-serif text-2xl font-semibold">
-                        KPAP &amp; Fleet Readiness
-                      </h2>
-                    </div>
-
-                    <div className="my-5 grid grid-cols-3 gap-3 text-center">
-                      {[
-                        { label: "Summit Rate", pct: 94, color: "#62b388" },
-                        { label: "Fleet Booked", pct: 82, color: "#e5a853" },
-                        { label: "Invoices Paid", pct: 76, color: "#3b9d73" },
-                      ].map((ring) => (
-                        <div key={ring.label} className="flex flex-col items-center">
-                          <div className="relative flex h-20 w-20 items-center justify-center">
-                            <svg viewBox="0 0 80 80" className="h-full w-full" fill="none">
-                              <circle
-                                cx="40"
-                                cy="40"
-                                r="32"
-                                stroke="currentColor"
-                                className="text-border"
-                                strokeWidth="5"
-                              />
-                              <path
-                                data-dash-ring
-                                data-pct={ring.pct}
-                                d="M 40 8 A 32 32 0 1 1 39.99 8"
-                                stroke={ring.color}
-                                strokeWidth="5.5"
-                                strokeLinecap="round"
-                              />
-                            </svg>
-                            <span className="absolute font-mono text-xs font-bold">
-                              {ring.pct}%
-                            </span>
-                          </div>
-                          <span className="mt-1.5 font-mono text-[10px] text-muted-foreground">
-                            {ring.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setTab("invoices")}
-                      className="cursor-pointer w-full rounded-full bg-primary py-2.5 text-xs font-semibold text-primary-foreground"
-                    >
-                      Open PDF Invoice Studio →
-                    </button>
-                  </div>
-                </div>
-
-                {/* Circuit Bars + Dispatch Activity Heatmap */}
-                <div className="grid gap-5 lg:grid-cols-2">
-                  <div
-                    data-dash-reveal
-                    className="rounded-3xl border border-border bg-card p-6 space-y-4 shadow-sm"
-                  >
-                    <h2 className="font-serif text-2xl font-semibold">
-                      Circuit Demand Breakdown
-                    </h2>
-                    <div className="space-y-3">
-                      {[
-                        { name: "Kilimanjaro Lemosho & Northern", pct: 88 },
-                        { name: "Serengeti Mara Crossings", pct: 76 },
-                        { name: "Ngorongoro & Tarangire", pct: 69 },
-                        { name: "Zanzibar Reef Extensions", pct: 61 },
-                      ].map((row) => (
-                        <div key={row.name}>
-                          <div className="flex justify-between text-xs font-medium mb-1">
-                            <span>{row.name}</span>
-                            <span className="font-mono text-primary">
-                              {row.pct}%
-                            </span>
-                          </div>
-                          <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
-                            <div
-                              data-dash-bar
-                              style={{ width: `${row.pct}%` }}
-                              className="h-full rounded-full bg-gradient-to-r from-[#2e7c52] to-[#e5a853]"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div
-                    data-dash-reveal
-                    className="rounded-3xl border border-border bg-card p-6 space-y-4 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h2 className="font-serif text-2xl font-semibold">
-                        Concierge &amp; Crew Heatmap
-                      </h2>
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        7 Days × 10 Windows
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-10 gap-1.5">
-                      {HEATMAP_MATRIX.flatMap((row, rIdx) =>
-                        row.map((val, cIdx) => (
-                          <span
-                            key={`${rIdx}-${cIdx}`}
-                            data-dash-heat
-                            style={{
-                              opacity: 0.25 + val * 0.08,
-                            }}
-                            className={`h-5 rounded-md ${
-                              val >= 7
-                                ? "bg-[#e5a853]"
-                                : val >= 5
-                                ? "bg-primary"
-                                : "bg-primary/40"
-                            }`}
-                          />
-                        ))
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between pt-2 text-xs text-muted-foreground">
-                      <span>Peak dispatch: 09:00 – 17:00 EAT</span>
+                    {!isGoogleAdmin && (
                       <button
                         type="button"
-                        onClick={handleSeedToFirestore}
-                        className="cursor-pointer font-mono text-[11px] font-semibold text-primary hover:underline"
+                        onClick={handleGoogleSignIn}
+                        className="mt-1 w-full cursor-pointer flex items-center gap-2 rounded-xl px-3 py-2 text-xs hover:bg-secondary"
                       >
-                        Push Seed to Firestore →
+                        <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                        Link Google Firebase Auth
                       </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* =========================================================== */}
-            {/* TAB: CLIENTS & CLIENT PORTAL WORKSPACES                     */}
-            {/* =========================================================== */}
-            {tab === "clients" && (
-              <div className="grid gap-7 xl:grid-cols-[0.88fr_1.12fr] xl:items-start">
-                <form
-                  data-dash-reveal
-                  onSubmit={handleAddClient}
-                  className="rounded-3xl border border-border bg-card p-6 space-y-4"
-                >
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-5 w-5 text-primary" />
-                    <h2 className="font-serif text-2xl font-semibold">
-                      Add Client Workspace
-                    </h2>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    When clients sign in via Google on <code>/portal</code>, they automatically unlock their assigned trip, KPAP crew, and PDF invoices.
-                  </p>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Client Full Name
-                      </label>
-                      <input
-                        required
-                        value={cliName}
-                        onChange={(e) => setCliName(e.target.value)}
-                        placeholder="Baraka Mrema"
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Google Email (Portal Access)
-                      </label>
-                      <input
-                        required
-                        type="email"
-                        value={cliEmail}
-                        onChange={(e) => setCliEmail(e.target.value)}
-                        placeholder="baraka@gmail.com"
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Company / Family Group
-                      </label>
-                      <input
-                        value={cliOrg}
-                        onChange={(e) => setCliOrg(e.target.value)}
-                        placeholder="Serengeti Collective"
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Client Logo Upload (for Invoice)
-                      </label>
-                      <label className="mt-1 cursor-pointer flex items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background px-3 py-2 text-xs hover:border-primary">
-                        <Upload className="h-3.5 w-3.5 text-primary" />
-                        {cliLogoUrl ? "Logo Ready ✓" : "Upload PNG/JPG"}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleClientLogoUpload(e, "clientForm")}
-                          className="sr-only"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Assigned Expedition Title
-                    </label>
-                    <input
-                      value={cliTrip}
-                      onChange={(e) => setCliTrip(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                    />
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Travel Dates
-                      </label>
-                      <input
-                        value={cliDates}
-                        onChange={(e) => setCliDates(e.target.value)}
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Lead Guide
-                      </label>
-                      <input
-                        value={cliGuide}
-                        onChange={(e) => setCliGuide(e.target.value)}
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Contract USD
-                      </label>
-                      <input
-                        type="number"
-                        value={cliTotalUsd}
-                        onChange={(e) => setCliTotalUsd(Number(e.target.value))}
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full cursor-pointer rounded-full bg-primary py-3 text-sm font-semibold text-primary-foreground"
-                  >
-                    Create Client Workspace
-                  </button>
-                </form>
-
-                {/* Active Client Cards */}
-                <div className="space-y-4">
-                  {clients.map((cli) => (
-                    <div
-                      key={cli.id}
-                      data-dash-reveal
-                      className="rounded-3xl border border-border bg-card p-5 space-y-4 shadow-sm"
+                    )}
+                    <TransitionLink
+                      href="/portal"
+                      className="mt-1 w-full flex items-center gap-2 rounded-xl px-3 py-2 text-xs hover:bg-secondary"
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex items-center gap-3.5">
-                          {cli.logoUrl ? (
-                            <img
-                              src={cli.logoUrl}
-                              alt={cli.organization}
-                              className="h-12 w-12 rounded-2xl object-contain bg-white p-1 border border-border"
-                            />
-                          ) : (
-                            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/15 font-serif text-lg font-bold text-primary">
-                              {cli.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .slice(0, 2)
-                                .join("")}
-                            </span>
-                          )}
-                          <div>
-                            <h3 className="font-serif text-xl font-semibold">
-                              {cli.name}
-                            </h3>
-                            <div className="font-mono text-[11px] text-muted-foreground">
-                              {cli.organization} · {cli.email}
-                            </div>
-                          </div>
-                        </div>
-
-                        <select
-                          value={cli.tripStatus}
-                          onChange={(e) =>
-                            handleClientStatusChange(
-                              cli,
-                              e.target.value as AdminClientRecord["tripStatus"]
-                            )
-                          }
-                          className="rounded-full border border-border bg-background px-3 py-1 font-mono text-[11px]"
-                        >
-                          <option value="Planning">Planning</option>
-                          <option value="Permits Issued">Permits Issued</option>
-                          <option value="Deposit Paid">Deposit Paid</option>
-                          <option value="In Field">In Field</option>
-                          <option value="Completed">Completed</option>
-                        </select>
-                      </div>
-
-                      <div className="rounded-2xl border border-border bg-background/80 p-3.5 grid gap-2 sm:grid-cols-3 text-xs">
-                        <div>
-                          <div className="font-mono text-[9.5px] text-muted-foreground">
-                            EXPEDITION
-                          </div>
-                          <div className="font-medium">{cli.tripTitle}</div>
-                        </div>
-                        <div>
-                          <div className="font-mono text-[9.5px] text-muted-foreground">
-                            CREW &amp; UNIT
-                          </div>
-                          <div className="font-medium">{cli.leadGuide}</div>
-                        </div>
-                        <div>
-                          <div className="font-mono text-[9.5px] text-muted-foreground">
-                            CONTRACT / PAID
-                          </div>
-                          <div className="font-mono font-semibold text-primary">
-                            ${cli.totalUsd.toLocaleString()} ($
-                            {cli.paidUsd.toLocaleString()} paid)
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSendWelcomePack(cli)}
-                          disabled={sendingMail}
-                          className="cursor-pointer inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
-                        >
-                          <Sparkles className="h-3.5 w-3.5" />
-                          {cli.welcomeSent
-                            ? "Resend VIP Welcome Pack"
-                            : "Send VIP Welcome Email"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => loadClientIntoInvoice(cli)}
-                          className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold hover:bg-secondary"
-                        >
-                          <FileText className="h-3.5 w-3.5 text-[#b86f2d] dark:text-[#e5a853]" />
-                          PDF Invoice ({cli.invoiceNumber})
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      <Users className="h-3.5 w-3.5 text-primary" />
+                      Switch to Client Portal
+                    </TransitionLink>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="mt-1 w-full cursor-pointer flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-red-500 hover:bg-secondary"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      Sign Out
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+          </div>
+        </header>
 
-            {/* =========================================================== */}
-            {/* TAB: PDF INVOICE STUDIO WITH CLIENT LOGO & COST BREAKDOWN    */}
-            {/* =========================================================== */}
-            {tab === "invoices" && (
-              <div className="grid gap-7 xl:grid-cols-[0.95fr_1.05fr] xl:items-start">
-                {/* Left Editor */}
+        {/* Workspace Content */}
+        <div className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-8 sm:py-8 space-y-6">
+          {/* =========================================================== */}
+          {/* TAB: OVERVIEW (TIMBRE-STYLE ANIMATED CHARTS + RINGS + HEATMAP) */}
+          {/* =========================================================== */}
+          {tab === "overview" && (
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  {
+                    label: "Projected Season Volume",
+                    value: "$39,920",
+                    delta: "+24.6%",
+                    sub: `${clients.length} active VIP dossiers`,
+                  },
+                  {
+                    label: "Client Portal Access",
+                    value: `${clients.filter((c) => c.welcomeSent).length} / ${clients.length}`,
+                    delta: "Google Ready",
+                    sub: "Branded welcome emails sent",
+                  },
+                  {
+                    label: "Site CMS Controls",
+                    value: siteSettings.announcementEnabled ? "Promo On" : "Standard",
+                    delta: "Live Sync",
+                    sub: `Hero: "${siteSettings.heroTitle}"`,
+                  },
+                  {
+                    label: "Media CDN Library",
+                    value: String(mediaAssets.length),
+                    delta: health.cloudinary ? "Cloudinary" : "Local Ready",
+                    sub: "Auto f_auto WebP delivery",
+                  },
+                ].map((kpi) => (
+                  <div
+                    key={kpi.label}
+                    data-dash-reveal
+                    className="rounded-3xl border border-border bg-card/90 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40"
+                  >
+                    <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <span>{kpi.label}</span>
+                      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-primary font-semibold">
+                        {kpi.delta}
+                      </span>
+                    </div>
+                    <div className="mt-2 font-serif text-3xl sm:text-4xl font-semibold">
+                      {kpi.value}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {kpi.sub}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
                 <div
                   data-dash-reveal
-                  className="rounded-3xl border border-border bg-card p-6 space-y-5"
+                  className="rounded-3xl border border-border bg-card/90 p-6 shadow-sm"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h2 className="font-serif text-2xl font-semibold">
-                        PDF Invoice Builder
-                      </h2>
-                      <p className="text-xs text-muted-foreground">
-                        Upload client logo, adjust line-item costs, then export crisp PDF or email directly.
-                      </p>
-                    </div>
-                    <select
-                      value={invoiceDraft.currency}
-                      onChange={(e) =>
-                        setInvoiceDraft((p) => ({
-                          ...p,
-                          currency: e.target.value as "USD" | "TZS",
-                        }))
-                      }
-                      className="rounded-full border border-border bg-background px-3 py-1 font-mono text-xs"
-                    >
-                      <option value="USD">USD ($)</option>
-                      <option value="TZS">TZS (Shs)</option>
-                    </select>
-                  </div>
-
-                  {/* Client Logo & Metadata */}
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Client / Partner Name
-                      </label>
-                      <input
-                        value={invoiceDraft.clientName}
-                        onChange={(e) =>
-                          setInvoiceDraft((p) => ({
-                            ...p,
-                            clientName: e.target.value,
-                          }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Organization / Studio
-                      </label>
-                      <input
-                        value={invoiceDraft.clientOrg}
-                        onChange={(e) =>
-                          setInvoiceDraft((p) => ({
-                            ...p,
-                            clientOrg: e.target.value,
-                          }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Client Email
-                      </label>
-                      <input
-                        value={invoiceDraft.clientEmail}
-                        onChange={(e) =>
-                          setInvoiceDraft((p) => ({
-                            ...p,
-                            clientEmail: e.target.value,
-                          }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Invoice Number
-                      </label>
-                      <input
-                        value={invoiceDraft.invoiceNumber}
-                        onChange={(e) =>
-                          setInvoiceDraft((p) => ({
-                            ...p,
-                            invoiceNumber: e.target.value,
-                          }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Upload Client Logo */}
-                  <div className="rounded-2xl border border-dashed border-primary/40 bg-background p-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      {invoiceDraft.clientLogoUrl ? (
-                        <img
-                          src={invoiceDraft.clientLogoUrl}
-                          alt="Client logo preview"
-                          className="h-11 w-16 rounded-lg object-contain bg-white p-1 border border-border"
-                        />
-                      ) : (
-                        <span className="grid h-11 w-16 place-items-center rounded-lg bg-secondary font-mono text-[10px] text-muted-foreground">
-                          NO LOGO
-                        </span>
-                      )}
-                      <div>
-                        <div className="text-xs font-semibold">
-                          Client / Agency Logo
-                        </div>
-                        <div className="text-[11px] text-muted-foreground">
-                          Embeds crisply at top-right of PDF header
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {invoiceDraft.clientLogoUrl && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setInvoiceDraft((p) => ({ ...p, clientLogoUrl: "" }))
-                          }
-                          className="cursor-pointer rounded-full border border-border px-3 py-1.5 text-[11px]"
-                        >
-                          Clear
-                        </button>
-                      )}
-                      <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground">
-                        <Upload className="h-3.5 w-3.5" />
-                        Upload Client Logo
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleClientLogoUpload(e, "invoice")}
-                          className="sr-only"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Line Items Editor */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[10.5px] uppercase tracking-wider text-muted-foreground">
-                        Cost Breakdown Line Items
+                      <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                        Booking Trajectory · Monotone Curve
                       </span>
-                      <button
-                        type="button"
-                        onClick={handleAddInvoiceItem}
-                        className="cursor-pointer inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-primary"
-                      >
-                        <Plus className="h-3.5 w-3.5" /> Add Row
-                      </button>
+                      <h2 className="mt-1 font-serif text-2xl font-semibold">
+                        Expedition Revenue &amp; Permits
+                      </h2>
                     </div>
-
-                    {invoiceDraft.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-2xl border border-border bg-background p-3 space-y-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={item.category}
-                            onChange={(e) =>
-                              handleUpdateInvoiceItem(item.id, {
-                                category: e.target.value,
-                              })
-                            }
-                            placeholder="Category"
-                            className="w-40 rounded-lg border border-border bg-card px-2.5 py-1 font-mono text-[11px]"
-                          />
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.qty}
-                            onChange={(e) =>
-                              handleUpdateInvoiceItem(item.id, {
-                                qty: Math.max(1, Number(e.target.value)),
-                              })
-                            }
-                            className="w-16 rounded-lg border border-border bg-card px-2 py-1 text-center font-mono text-xs"
-                          />
-                          <input
-                            type="number"
-                            min={0}
-                            value={item.unitPriceUsd}
-                            onChange={(e) =>
-                              handleUpdateInvoiceItem(item.id, {
-                                unitPriceUsd: Math.max(0, Number(e.target.value)),
-                              })
-                            }
-                            className="w-24 rounded-lg border border-border bg-card px-2 py-1 text-right font-mono text-xs"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveInvoiceItem(item.id)}
-                            className="ml-auto cursor-pointer p-1 text-muted-foreground hover:text-red-500"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        <input
-                          value={item.description}
-                          onChange={(e) =>
-                            handleUpdateInvoiceItem(item.id, {
-                              description: e.target.value,
-                            })
-                          }
-                          className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs"
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Tax / Deposit */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Park Levy / Tax %
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={25}
-                        value={invoiceDraft.taxPct}
-                        onChange={(e) =>
-                          setInvoiceDraft((p) => ({
-                            ...p,
-                            taxPct: Number(e.target.value),
-                          }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Deposit Due %
-                      </label>
-                      <input
-                        type="number"
-                        min={10}
-                        max={100}
-                        value={invoiceDraft.depositPct}
-                        onChange={(e) =>
-                          setInvoiceDraft((p) => ({
-                            ...p,
-                            depositPct: Number(e.target.value),
-                          }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-                    <button
-                      type="button"
-                      onClick={handleDownloadPdf}
-                      disabled={generatingPdf}
-                      className="flex-1 cursor-pointer inline-flex items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-xs font-semibold text-primary-foreground shadow"
-                    >
-                      {generatingPdf ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Download className="h-4 w-4" />
-                      )}
-                      Download Branded PDF Invoice
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleEmailInvoice}
-                      disabled={sendingMail}
-                      className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-full border border-border bg-background px-5 py-3.5 text-xs font-semibold hover:bg-secondary"
-                    >
-                      <Mail className="h-4 w-4 text-primary" />
-                      Email Invoice
-                    </button>
-                  </div>
-                </div>
-
-                {/* Right: Live Branded A4 Paper Preview */}
-                <div
-                  data-dash-reveal
-                  className="overflow-hidden rounded-3xl border border-border bg-white text-[#14211a] shadow-2xl"
-                >
-                  {/* Obsidian Banner */}
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b-2 border-[#e5a853] bg-[#08100c] px-6 py-5 text-white">
-                    <div>
-                      <div className="font-serif text-xl font-bold tracking-wide">
-                        KIBO &amp; PLAINS
-                      </div>
-                      <div className="font-mono text-[10px] text-[#e5a853]">
-                        ARUSHA &amp; MOSHI · TANAPA &amp; KPAP CERTIFIED
-                      </div>
-                    </div>
-
-                    {invoiceDraft.clientLogoUrl ? (
-                      <div className="rounded-xl bg-white p-1.5 shadow">
-                        <img
-                          src={invoiceDraft.clientLogoUrl}
-                          alt="Client Logo"
-                          className="h-10 max-w-[120px] object-contain"
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-right font-mono">
-                        <div className="text-xs font-bold text-[#e5a853]">
-                          OFFICIAL INVOICE
-                        </div>
-                        <div className="text-[11px] text-white/80">
-                          {invoiceDraft.invoiceNumber}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Client & Totals Body */}
-                  <div className="p-6 space-y-5">
-                    <div className="flex flex-wrap justify-between gap-4 rounded-2xl border border-[#d6e4dc] bg-[#f4f8f5] p-4 text-xs">
-                      <div>
-                        <div className="font-mono text-[9.5px] uppercase tracking-wider text-[#145131] font-bold">
-                          Billed To
-                        </div>
-                        <div className="mt-1 text-base font-bold">
-                          {invoiceDraft.clientName}
-                        </div>
-                        <div className="text-[#54665c]">
-                          {invoiceDraft.clientOrg} · {invoiceDraft.clientEmail}
-                        </div>
-                        <div className="mt-1 font-semibold text-[#145131]">
-                          {invoiceDraft.tripTitle}
-                        </div>
-                      </div>
-                      <div className="font-mono text-[11px] text-right space-y-0.5 text-[#54665c]">
-                        <div>
-                          <strong className="text-[#14211a]">
-                            {invoiceDraft.invoiceNumber}
-                          </strong>
-                        </div>
-                        <div>Issued: {invoiceDraft.issueDate}</div>
-                        <div>Due: {invoiceDraft.dueDate}</div>
-                        <div>Currency: {invoiceDraft.currency}</div>
-                      </div>
-                    </div>
-
-                    {/* Breakdown Rows */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-[#145131]/20 bg-[#145131] text-white font-mono text-[10px]">
-                            <th className="rounded-l-lg px-3 py-2 text-left">
-                              BREAKDOWN ITEM
-                            </th>
-                            <th className="px-2 py-2 text-right">QTY</th>
-                            <th className="px-2 py-2 text-right">UNIT</th>
-                            <th className="rounded-r-lg px-3 py-2 text-right">
-                              TOTAL
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#e2eee7]">
-                          {invoiceDraft.items.map((item) => (
-                            <tr key={item.id}>
-                              <td className="px-3 py-2.5">
-                                <div className="font-mono text-[9.5px] font-bold uppercase text-[#b86f2d]">
-                                  {item.category}
-                                </div>
-                                <div className="text-[#14211a]">
-                                  {item.description}
-                                </div>
-                              </td>
-                              <td className="px-2 py-2.5 text-right font-mono">
-                                {item.qty}
-                              </td>
-                              <td className="px-2 py-2.5 text-right font-mono">
-                                {formatMoney(item.unitPriceUsd, invoiceDraft)}
-                              </td>
-                              <td className="px-3 py-2.5 text-right font-mono font-bold">
-                                {formatMoney(
-                                  item.qty * item.unitPriceUsd,
-                                  invoiceDraft
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Totals Box */}
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-2xl bg-[#f4f8f5] p-3.5 text-[11px] text-[#54665c]">
-                        <div className="font-mono text-[9.5px] font-bold uppercase text-[#145131] mb-1">
-                          Payment Channels
-                        </div>
-                        {invoiceDraft.notes}
-                      </div>
-
-                      <div className="rounded-2xl bg-[#08100c] p-4 text-white font-mono text-xs space-y-1.5">
-                        <div className="flex justify-between text-white/75">
-                          <span>Subtotal</span>
-                          <span>
-                            {formatMoney(invoiceTotals.subtotal, invoiceDraft)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-white/75">
-                          <span>Levy / Tax ({invoiceDraft.taxPct}%)</span>
-                          <span>{formatMoney(invoiceTotals.tax, invoiceDraft)}</span>
-                        </div>
-                        <div className="flex justify-between border-t border-white/15 pt-1.5 text-sm font-bold">
-                          <span>Total</span>
-                          <span className="text-[#e5a853]">
-                            {formatMoney(invoiceTotals.total, invoiceDraft)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-[11px] text-[#62b388]">
-                          <span>Deposit ({invoiceDraft.depositPct}%)</span>
-                          <span>
-                            {formatMoney(invoiceTotals.deposit, invoiceDraft)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* =========================================================== */}
-            {/* TAB: EXPEDITIONS                                            */}
-            {/* =========================================================== */}
-            {tab === "expeditions" && (
-              <div className="grid gap-7 xl:grid-cols-[0.88fr_1.12fr] xl:items-start">
-                <form
-                  data-dash-reveal
-                  onSubmit={handleAddExpedition}
-                  className="rounded-3xl border border-border bg-card p-6 space-y-4"
-                >
-                  <h2 className="font-serif text-2xl font-semibold flex items-center gap-2">
-                    <Plus className="h-5 w-5 text-primary" />
-                    Add Expedition Package
-                  </h2>
-                  <div>
-                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Title
-                    </label>
-                    <input
-                      required
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      placeholder="7-Day Serengeti Calving Fly-In"
-                      className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                    />
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      value={newSwahili}
-                      onChange={(e) => setNewSwahili(e.target.value)}
-                      placeholder="Swahili Tagline"
-                      className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                    />
-                    <select
-                      value={newCategory}
-                      onChange={(e) =>
-                        setNewCategory(
-                          e.target.value as AdminExpeditionItem["category"]
-                        )
-                      }
-                      className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                    >
-                      <option value="Kilimanjaro">Kilimanjaro</option>
-                      <option value="Northern Circuit">Northern Circuit</option>
-                      <option value="Southern & Western">
-                        Southern &amp; Western
-                      </option>
-                      <option value="Coast">Coast</option>
-                    </select>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      type="number"
-                      value={newDays}
-                      onChange={(e) => setNewDays(Number(e.target.value))}
-                      className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                    />
-                    <input
-                      type="number"
-                      value={newPrice}
-                      onChange={(e) => setNewPrice(Number(e.target.value))}
-                      className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                    />
-                  </div>
-                  <input
-                    value={newImage}
-                    onChange={(e) => setNewImage(e.target.value)}
-                    placeholder="Image URL"
-                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 font-mono text-xs"
-                  />
-                  <textarea
-                    rows={2}
-                    value={newSummary}
-                    onChange={(e) => setNewSummary(e.target.value)}
-                    placeholder="Highlights summary..."
-                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                  />
-                  <button
-                    type="submit"
-                    className="w-full cursor-pointer rounded-full bg-primary py-3 text-sm font-semibold text-primary-foreground"
-                  >
-                    Save Package
-                  </button>
-                </form>
-
-                <div className="space-y-4">
-                  {expeditions.map((exp) => (
-                    <div
-                      key={exp.id}
-                      data-dash-reveal
-                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-3xl border border-border bg-card p-4"
-                    >
-                      <div className="flex items-center gap-4">
-                        <img
-                          src={exp.featuredImage}
-                          alt={exp.title}
-                          className="h-16 w-24 shrink-0 rounded-2xl object-cover border border-border"
-                        />
-                        <div>
-                          <span className="font-mono text-[10px] uppercase tracking-wider text-primary">
-                            {exp.category} · {exp.durationDays}D · From $
-                            {exp.priceFromUsd.toLocaleString()}
-                          </span>
-                          <h3 className="font-serif text-xl font-semibold">
-                            {exp.title}
-                          </h3>
-                          <p className="text-xs text-muted-foreground line-clamp-1">
-                            {exp.summary}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 self-end sm:self-center">
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePublished(exp)}
-                          className="cursor-pointer rounded-full border border-border bg-background p-2"
-                        >
-                          {exp.published ? (
-                            <Eye className="h-4 w-4 text-primary" />
-                          ) : (
-                            <EyeOff className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteExpedition(exp.id)}
-                          className="cursor-pointer rounded-full border border-border bg-background p-2 hover:text-red-500"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* =========================================================== */}
-            {/* TAB: INQUIRIES & NODEMAILER DISPATCH                        */}
-            {/* =========================================================== */}
-            {tab === "inquiries" && (
-              <div className="grid gap-7 xl:grid-cols-[1.05fr_0.95fr] xl:items-start">
-                <div className="space-y-4">
-                  {inquiries.map((inq) => (
-                    <div
-                      key={inq.id}
-                      data-dash-reveal
-                      className="rounded-3xl border border-border bg-card p-5 space-y-3"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <div className="font-serif text-xl font-semibold">
-                            {inq.guestName}
-                          </div>
-                          <div className="font-mono text-xs text-muted-foreground">
-                            {inq.guestEmail} · {inq.travelers} guests ·{" "}
-                            {inq.month} 2027
-                          </div>
-                        </div>
-                        <select
-                          value={inq.status}
-                          onChange={(e) =>
-                            handleInquiryStatus(
-                              inq,
-                              e.target.value as AdminInquiryItem["status"]
-                            )
-                          }
-                          className="rounded-full border border-border bg-background px-3 py-1 font-mono text-[11px]"
-                        >
-                          <option value="new">NEW</option>
-                          <option value="quoted">QUOTED</option>
-                          <option value="confirmed">CONFIRMED</option>
-                          <option value="archived">ARCHIVED</option>
-                        </select>
-                      </div>
-                      <div className="flex flex-wrap gap-2 font-mono text-[11px] text-muted-foreground">
-                        <span className="rounded-full bg-secondary px-2.5 py-0.5 text-foreground uppercase">
-                          {inq.focus}
-                        </span>
-                        <span>{inq.totalDays} days</span>
-                        <span>· ${inq.estimatePerPerson.toLocaleString()} pp</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMailTo(inq.guestEmail);
-                            setMailGuestName(inq.guestName);
-                            setMailTemplate("welcome");
-                            setMailSubject(
-                              `Karibu Tanzania — Your ${inq.totalDays}-Day Kibo & Plains Dossier`
-                            );
-                          }}
-                          className="cursor-pointer inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground"
-                        >
-                          <Mail className="h-3.5 w-3.5" />
-                          Load into Mail Composer
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <form
-                  data-dash-reveal
-                  onSubmit={handleSendMail}
-                  className="rounded-3xl border border-border bg-card p-6 space-y-4 xl:sticky xl:top-24"
-                >
-                  <div className="flex items-center justify-between">
-                    <h2 className="font-serif text-2xl font-semibold">
-                      Nodemailer Custom Dispatcher
-                    </h2>
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold ${
-                        health.nodemailer
-                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                          : "bg-amber-500/15 text-[#b86f2d] dark:text-[#e5a853]"
-                      }`}
-                    >
-                      {health.nodemailer ? "SMTP LIVE" : "PREVIEW READY"}
+                    <span className="rounded-full border border-border bg-background px-3 py-1 font-mono text-[10.5px]">
+                      2026–2027 Peak
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-1.5 rounded-full border border-border bg-background p-1">
-                    {(["welcome", "invoice", "quote"] as const).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setMailTemplate(t)}
-                        className={`cursor-pointer rounded-full py-1.5 font-mono text-[10.5px] uppercase ${
-                          mailTemplate === t
-                            ? "bg-primary text-primary-foreground font-semibold"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {t}
-                      </button>
+                  <div className="mt-5">
+                    <svg
+                      viewBox="0 0 640 180"
+                      className="w-full h-44 overflow-visible"
+                      fill="none"
+                    >
+                      <defs>
+                        <linearGradient id="dashSplineFill" x1="0" y1="0" x2="0" y2="180" gradientUnits="userSpaceOnUse">
+                          <stop offset="0%" stopColor="#2e7c52" stopOpacity="0.28" />
+                          <stop offset="100%" stopColor="#2e7c52" stopOpacity="0" />
+                        </linearGradient>
+                        <linearGradient id="dashSplineStroke" x1="0" y1="0" x2="640" y2="0" gradientUnits="userSpaceOnUse">
+                          <stop offset="0%" stopColor="#2e7c52" />
+                          <stop offset="60%" stopColor="#e5a853" />
+                          <stop offset="100%" stopColor="#62b388" />
+                        </linearGradient>
+                      </defs>
+
+                      {[35, 80, 125, 165].map((y) => (
+                        <line
+                          key={y}
+                          x1="0"
+                          y1={y}
+                          x2="640"
+                          y2={y}
+                          stroke="currentColor"
+                          className="text-border"
+                          strokeDasharray="4 6"
+                          strokeWidth="1"
+                        />
+                      ))}
+
+                      <path
+                        d="M 10 150 C 90 142, 130 98, 210 105 C 290 112, 330 56, 415 62 C 495 68, 540 22, 630 18 L 630 175 L 10 175 Z"
+                        fill="url(#dashSplineFill)"
+                      />
+
+                      <path
+                        ref={splinePathRef}
+                        d="M 10 150 C 90 142, 130 98, 210 105 C 290 112, 330 56, 415 62 C 495 68, 540 22, 630 18"
+                        stroke="url(#dashSplineStroke)"
+                        strokeWidth="3.2"
+                        strokeLinecap="round"
+                      />
+
+                      {[
+                        [10, 150, "Jan"],
+                        [210, 105, "Apr"],
+                        [415, 62, "Jul"],
+                        [630, 18, "Oct"],
+                      ].map(([cx, cy, label]) => (
+                        <g key={String(label)}>
+                          <circle
+                            cx={Number(cx)}
+                            cy={Number(cy)}
+                            r="4.5"
+                            fill="#e5a853"
+                            stroke="#08100c"
+                            strokeWidth="1.5"
+                          />
+                          <text
+                            x={Number(cx)}
+                            y="178"
+                            textAnchor="middle"
+                            fontSize="10"
+                            fill="currentColor"
+                            className="text-muted-foreground font-mono"
+                          >
+                            {label}
+                          </text>
+                        </g>
+                      ))}
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Animated Radial Rings */}
+                <div
+                  data-dash-reveal
+                  className="rounded-3xl border border-border bg-card/90 p-6 shadow-sm flex flex-col justify-between"
+                >
+                  <div>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                      Live Operations Gauges
+                    </span>
+                    <h2 className="mt-1 font-serif text-2xl font-semibold">
+                      KPAP &amp; Fleet Readiness
+                    </h2>
+                  </div>
+
+                  <div className="my-5 grid grid-cols-3 gap-3 text-center">
+                    {[
+                      { label: "Summit Rate", pct: 94, color: "#62b388" },
+                      { label: "Fleet Booked", pct: 82, color: "#e5a853" },
+                      { label: "Invoices Paid", pct: 76, color: "#3b9d73" },
+                    ].map((ring) => (
+                      <div key={ring.label} className="flex flex-col items-center">
+                        <div className="relative flex h-20 w-20 items-center justify-center">
+                          <svg viewBox="0 0 80 80" className="h-full w-full" fill="none">
+                            <circle
+                              cx="40"
+                              cy="40"
+                              r="32"
+                              stroke="currentColor"
+                              className="text-border"
+                              strokeWidth="5"
+                            />
+                            <path
+                              data-dash-ring
+                              data-pct={ring.pct}
+                              d="M 40 8 A 32 32 0 1 1 39.99 8"
+                              stroke={ring.color}
+                              strokeWidth="5.5"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <span className="absolute font-mono text-xs font-bold">
+                            {ring.pct}%
+                          </span>
+                        </div>
+                        <span className="mt-1.5 font-mono text-[10px] text-muted-foreground">
+                          {ring.label}
+                        </span>
+                      </div>
                     ))}
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setTab("site")}
+                    className="cursor-pointer w-full rounded-full bg-primary py-2.5 text-xs font-semibold text-primary-foreground"
+                  >
+                    Manage Live Site Controls →
+                  </button>
+                </div>
+              </div>
+
+              {/* Circuit Bars + Activity Heatmap */}
+              <div className="grid gap-5 lg:grid-cols-2">
+                <div
+                  data-dash-reveal
+                  className="rounded-3xl border border-border bg-card/90 p-6 space-y-4 shadow-sm"
+                >
+                  <h2 className="font-serif text-2xl font-semibold">
+                    Circuit Demand Breakdown
+                  </h2>
+                  <div className="space-y-3">
+                    {[
+                      { name: "Kilimanjaro Lemosho & Northern", pct: 88 },
+                      { name: "Serengeti Mara Crossings", pct: 76 },
+                      { name: "Ngorongoro & Tarangire", pct: 69 },
+                      { name: "Zanzibar Reef Extensions", pct: 61 },
+                    ].map((row) => (
+                      <div key={row.name}>
+                        <div className="flex justify-between text-xs font-medium mb-1">
+                          <span>{row.name}</span>
+                          <span className="font-mono text-primary">
+                            {row.pct}%
+                          </span>
+                        </div>
+                        <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
+                          <div
+                            data-dash-bar
+                            style={{ width: `${row.pct}%` }}
+                            className="h-full rounded-full bg-gradient-to-r from-[#2e7c52] to-[#e5a853]"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div
+                  data-dash-reveal
+                  className="rounded-3xl border border-border bg-card/90 p-6 space-y-4 shadow-sm"
+                >
+                  <div className="flex items-center justify-between">
+                    <h2 className="font-serif text-2xl font-semibold">
+                      Concierge &amp; Crew Heatmap
+                    </h2>
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      7 Days × 10 Windows
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-10 gap-1.5">
+                    {HEATMAP_MATRIX.flatMap((row, rIdx) =>
+                      row.map((val, cIdx) => (
+                        <span
+                          key={`${rIdx}-${cIdx}`}
+                          data-dash-heat
+                          style={{ opacity: 0.25 + val * 0.08 }}
+                          className={`h-5 rounded-md ${
+                            val >= 7
+                              ? "bg-[#e5a853]"
+                              : val >= 5
+                              ? "bg-primary"
+                              : "bg-primary/40"
+                          }`}
+                        />
+                      ))
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between pt-2 text-xs text-muted-foreground">
+                    <span>Peak dispatch: 09:00 – 17:00 EAT</span>
+                    <button
+                      type="button"
+                      onClick={handleSeedToFirestore}
+                      className="cursor-pointer font-mono text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      Push All to Firestore →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================== */}
+          {/* TAB: SITE CONTROLS (MORE LIVE CONTROL ON PUBLIC SITE!)       */}
+          {/* =========================================================== */}
+          {tab === "site" && (
+            <form
+              onSubmit={handleSaveSiteSettings}
+              className="grid gap-7 xl:grid-cols-[1.15fr_0.85fr] xl:items-start"
+            >
+              <div
+                data-dash-reveal
+                className="rounded-3xl border border-border bg-card/95 p-6 space-y-5 shadow-sm"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                      Live Public Website CMS
+                    </span>
+                    <h2 className="mt-1 font-serif text-2xl font-semibold">
+                      Hero, Banners &amp; Section Controls
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetSiteSettings}
+                    className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-1.5 font-mono text-[11px] hover:bg-secondary"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Reset Defaults
+                  </button>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Hero Title
+                    </label>
+                    <input
+                      value={siteSettings.heroTitle}
+                      onChange={(e) =>
+                        setSiteSettings((s) => ({
+                          ...s,
+                          heroTitle: e.target.value,
+                        }))
+                      }
+                      className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Hero Eyebrow Tag
+                    </label>
+                    <input
+                      value={siteSettings.heroEyebrow}
+                      onChange={(e) =>
+                        setSiteSettings((s) => ({
+                          ...s,
+                          heroEyebrow: e.target.value,
+                        }))
+                      }
+                      className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 font-mono text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Hero Subtitle Copy
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={siteSettings.heroSubtitle}
+                    onChange={(e) =>
+                      setSiteSettings((s) => ({
+                        ...s,
+                        heroSubtitle: e.target.value,
+                      }))
+                    }
+                    className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Hero Backdrop Image (Cloudinary or Local)
+                  </label>
+                  <select
+                    value={siteSettings.heroBackdrop}
+                    onChange={(e) =>
+                      setSiteSettings((s) => ({
+                        ...s,
+                        heroBackdrop: e.target.value,
+                      }))
+                    }
+                    className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 font-mono text-xs"
+                  >
+                    {mediaAssets.map((m) => (
+                      <option key={m.publicId} value={m.url}>
+                        {m.label} ({m.url})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Live Announcement Ribbon Control */}
+                <div className="rounded-2xl border border-border bg-background p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">
+                        Top Announcement Ribbon
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Show a golden promo pill cleanly above the public navbar
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={siteSettings.announcementEnabled}
+                      onChange={(e) =>
+                        setSiteSettings((s) => ({
+                          ...s,
+                          announcementEnabled: e.target.checked,
+                        }))
+                      }
+                      className="h-4 w-4 accent-[#145131]"
+                    />
+                  </div>
+                  <input
+                    value={siteSettings.announcementText}
+                    onChange={(e) =>
+                      setSiteSettings((s) => ({
+                        ...s,
+                        announcementText: e.target.value,
+                      }))
+                    }
+                    placeholder="Announcement copy..."
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2 text-xs"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      WhatsApp Concierge Phone
+                    </label>
+                    <input
+                      value={siteSettings.whatsappNumber}
+                      onChange={(e) =>
+                        setSiteSettings((s) => ({
+                          ...s,
+                          whatsappNumber: e.target.value,
+                        }))
+                      }
+                      className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Seasonal Rate Modifier (%)
+                    </label>
+                    <input
+                      type="number"
+                      min={-30}
+                      max={40}
+                      value={siteSettings.seasonalModifierPct}
+                      onChange={(e) =>
+                        setSiteSettings((s) => ({
+                          ...s,
+                          seasonalModifierPct: Number(e.target.value),
+                        }))
+                      }
+                      className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Feature Flags + Live Hero Preview */}
+              <div className="space-y-5">
+                <div
+                  data-dash-reveal
+                  className="rounded-3xl border border-border bg-card/95 p-6 space-y-4 shadow-sm"
+                >
+                  <h3 className="font-serif text-2xl font-semibold">
+                    Homepage Section Toggles
+                  </h3>
+
+                  {[
+                    {
+                      key: "showExpeditionReel" as const,
+                      title: "Scroll-Animated Expedition Film Reel",
+                      desc: "Interactive 5-chapter Coast-to-Summit canvas reel & curved flight arc",
+                    },
+                    {
+                      key: "showInstrumentsSection" as const,
+                      title: "Realistic Field Craft & Motion Stickers",
+                      desc: "6 Tanzania photography cards with Motion Lab stickers & parallax",
+                    },
+                  ].map((toggle) => (
+                    <label
+                      key={toggle.key}
+                      className="flex items-start justify-between gap-3 rounded-2xl border border-border bg-background p-4 cursor-pointer"
+                    >
+                      <div>
+                        <div className="text-sm font-semibold">
+                          {toggle.title}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {toggle.desc}
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={siteSettings[toggle.key]}
+                        onChange={(e) =>
+                          setSiteSettings((s) => ({
+                            ...s,
+                            [toggle.key]: e.target.checked,
+                          }))
+                        }
+                        className="mt-1 h-4 w-4 accent-[#145131]"
+                      />
+                    </label>
+                  ))}
+
+                  {/* Mini Visual Hero Preview */}
+                  <div className="relative aspect-[16/9] overflow-hidden rounded-2xl border border-border">
+                    <img
+                      src={siteSettings.heroBackdrop}
+                      alt="Hero backdrop preview"
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center p-4 text-center text-white">
+                      <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#e5a853]">
+                        {siteSettings.heroEyebrow}
+                      </span>
+                      <div className="mt-1 font-serif text-3xl font-bold">
+                        {siteSettings.heroTitle}
+                      </div>
+                      <p className="mt-1 text-[10.5px] text-white/80 line-clamp-2 max-w-xs">
+                        {siteSettings.heroSubtitle}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2.5 pt-1">
+                    <button
+                      type="submit"
+                      disabled={savingSite}
+                      className="flex-1 cursor-pointer inline-flex items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-xs font-semibold text-primary-foreground shadow"
+                    >
+                      {savingSite ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4" />
+                      )}
+                      Publish Site Changes
+                    </button>
+                    <TransitionLink
+                      href="/"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-5 py-3.5 text-xs font-semibold hover:bg-secondary"
+                    >
+                      Inspect Home ↗
+                    </TransitionLink>
+                  </div>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {/* =========================================================== */}
+          {/* TAB: CLIENTS & PORTAL WORKSPACES                            */}
+          {/* =========================================================== */}
+          {tab === "clients" && (
+            <div className="grid gap-7 xl:grid-cols-[0.88fr_1.12fr] xl:items-start">
+              <form
+                data-dash-reveal
+                onSubmit={handleAddClient}
+                className="rounded-3xl border border-border bg-card/95 p-6 space-y-4"
+              >
+                <div className="flex items-center gap-2">
+                  <Briefcase className="h-5 w-5 text-primary" />
+                  <h2 className="font-serif text-2xl font-semibold">
+                    Add Client Workspace
+                  </h2>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  When clients sign in via Google on <code>/portal</code>, they automatically unlock their assigned trip, KPAP crew, and PDF invoices.
+                </p>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Client Full Name
+                    </label>
+                    <input
+                      required
+                      value={cliName}
+                      onChange={(e) => setCliName(e.target.value)}
+                      placeholder="Baraka Mrema"
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Google Email (Portal Access)
+                    </label>
                     <input
                       required
                       type="email"
-                      value={mailTo}
-                      onChange={(e) => setMailTo(e.target.value)}
-                      placeholder="Guest Email"
-                      className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                    />
-                    <input
-                      value={mailGuestName}
-                      onChange={(e) => setMailGuestName(e.target.value)}
-                      placeholder="Guest Name"
-                      className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                      value={cliEmail}
+                      onChange={(e) => setCliEmail(e.target.value)}
+                      placeholder="baraka@gmail.com"
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
                     />
                   </div>
-                  <input
-                    required
-                    value={mailSubject}
-                    onChange={(e) => setMailSubject(e.target.value)}
-                    placeholder="Subject"
-                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                  />
-                  <input
-                    value={mailHeadline}
-                    onChange={(e) => setMailHeadline(e.target.value)}
-                    placeholder="Banner Headline"
-                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                  />
-                  <textarea
-                    required
-                    rows={5}
-                    value={mailMessage}
-                    onChange={(e) => setMailMessage(e.target.value)}
-                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                  />
-                  <button
-                    type="submit"
-                    disabled={sendingMail}
-                    className="w-full cursor-pointer inline-flex items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-                  >
-                    {sendingMail ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                    Dispatch Custom Branded Email
-                  </button>
-                </form>
-              </div>
-            )}
+                </div>
 
-            {/* =========================================================== */}
-            {/* TAB: CLOUDINARY MEDIA                                       */}
-            {/* =========================================================== */}
-            {tab === "media" && (
-              <div className="space-y-6">
-                <div
-                  data-dash-reveal
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl border border-border bg-card p-6"
-                >
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <h2 className="font-serif text-2xl font-semibold">
-                      Cloudinary Media Studio
-                    </h2>
-                    <p className="text-xs text-muted-foreground">
-                      Optimized WebP/AVIF uploads via <code>/api/cloudinary/upload</code>
-                    </p>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Company / Family Group
+                    </label>
+                    <input
+                      value={cliOrg}
+                      onChange={(e) => setCliOrg(e.target.value)}
+                      placeholder="Serengeti Collective"
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                    />
                   </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <select
-                      value={uploadFolder}
-                      onChange={(e) => setUploadFolder(e.target.value)}
-                      className="rounded-full border border-border bg-background px-4 py-2 font-mono text-xs"
-                    >
-                      <option value="kibo-plains/expeditions">
-                        kibo-plains/expeditions
-                      </option>
-                      <option value="kibo-plains/parks">kibo-plains/parks</option>
-                      <option value="kibo-plains/kilimanjaro">
-                        kibo-plains/kilimanjaro
-                      </option>
-                      <option value="kibo-plains/fleet">kibo-plains/fleet</option>
-                    </select>
-                    <label className="cursor-pointer inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow">
-                      {uploading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <CloudUpload className="h-4 w-4" />
-                      )}
-                      Upload Photo
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Client Logo Upload (for Invoice)
+                    </label>
+                    <label className="mt-1 cursor-pointer flex items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background px-3 py-2 text-xs hover:border-primary">
+                      <Upload className="h-3.5 w-3.5 text-primary" />
+                      {cliLogoUrl ? "Logo Ready ✓" : "Upload PNG/JPG"}
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={handleCloudinaryUpload}
+                        onChange={(e) => handleClientLogoUpload(e, "clientForm")}
                         className="sr-only"
                       />
                     </label>
                   </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {mediaAssets.map((asset) => (
-                    <div
-                      key={asset.publicId}
-                      data-dash-reveal
-                      className="rounded-3xl border border-border bg-card p-3 space-y-2.5"
+                <div>
+                  <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Assigned Expedition Title
+                  </label>
+                  <input
+                    value={cliTrip}
+                    onChange={(e) => setCliTrip(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Travel Dates
+                    </label>
+                    <input
+                      value={cliDates}
+                      onChange={(e) => setCliDates(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Lead Guide
+                    </label>
+                    <input
+                      value={cliGuide}
+                      onChange={(e) => setCliGuide(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Contract USD
+                    </label>
+                    <input
+                      type="number"
+                      value={cliTotalUsd}
+                      onChange={(e) => setCliTotalUsd(Number(e.target.value))}
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full cursor-pointer rounded-full bg-primary py-3 text-sm font-semibold text-primary-foreground"
+                >
+                  Create Client Workspace
+                </button>
+              </form>
+
+              <div className="space-y-4">
+                {clients.map((cli) => (
+                  <div
+                    key={cli.id}
+                    data-dash-reveal
+                    className="rounded-3xl border border-border bg-card/95 p-5 space-y-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-center gap-3.5">
+                        {cli.logoUrl ? (
+                          <img
+                            src={cli.logoUrl}
+                            alt={cli.organization}
+                            className="h-12 w-12 rounded-2xl object-contain bg-white p-1 border border-border"
+                          />
+                        ) : (
+                          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/15 font-serif text-lg font-bold text-primary">
+                            {cli.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .slice(0, 2)
+                              .join("")}
+                          </span>
+                        )}
+                        <div>
+                          <h3 className="font-serif text-xl font-semibold">
+                            {cli.name}
+                          </h3>
+                          <div className="font-mono text-[11px] text-muted-foreground">
+                            {cli.organization} · {cli.email}
+                          </div>
+                        </div>
+                      </div>
+
+                      <select
+                        value={cli.tripStatus}
+                        onChange={(e) =>
+                          handleClientStatusChange(
+                            cli,
+                            e.target.value as AdminClientRecord["tripStatus"]
+                          )
+                        }
+                        className="rounded-full border border-border bg-background px-3 py-1 font-mono text-[11px]"
+                      >
+                        <option value="Planning">Planning</option>
+                        <option value="Permits Issued">Permits Issued</option>
+                        <option value="Deposit Paid">Deposit Paid</option>
+                        <option value="In Field">In Field</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-background/80 p-3.5 grid gap-2 sm:grid-cols-3 text-xs">
+                      <div>
+                        <div className="font-mono text-[9.5px] text-muted-foreground">
+                          EXPEDITION
+                        </div>
+                        <div className="font-medium">{cli.tripTitle}</div>
+                      </div>
+                      <div>
+                        <div className="font-mono text-[9.5px] text-muted-foreground">
+                          CREW &amp; UNIT
+                        </div>
+                        <div className="font-medium">{cli.leadGuide}</div>
+                      </div>
+                      <div>
+                        <div className="font-mono text-[9.5px] text-muted-foreground">
+                          CONTRACT / PAID
+                        </div>
+                        <div className="font-mono font-semibold text-primary">
+                          ${cli.totalUsd.toLocaleString()} ($
+                          {cli.paidUsd.toLocaleString()} paid)
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSendWelcomePack(cli)}
+                        disabled={sendingMail}
+                        className="cursor-pointer inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        {cli.welcomeSent
+                          ? "Resend VIP Welcome Pack"
+                          : "Send VIP Welcome Email"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => loadClientIntoInvoice(cli)}
+                        className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold hover:bg-secondary"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-[#b86f2d] dark:text-[#e5a853]" />
+                        PDF Invoice ({cli.invoiceNumber})
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================== */}
+          {/* TAB: PDF INVOICE STUDIO                                     */}
+          {/* =========================================================== */}
+          {tab === "invoices" && (
+            <div className="grid gap-7 xl:grid-cols-[0.95fr_1.05fr] xl:items-start">
+              <div
+                data-dash-reveal
+                className="rounded-3xl border border-border bg-card/95 p-6 space-y-5"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="font-serif text-2xl font-semibold">
+                      PDF Invoice Builder
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      Upload client logo, adjust line-item costs, then export crisp PDF or email directly.
+                    </p>
+                  </div>
+                  <select
+                    value={invoiceDraft.currency}
+                    onChange={(e) =>
+                      setInvoiceDraft((p) => ({
+                        ...p,
+                        currency: e.target.value as "USD" | "TZS",
+                      }))
+                    }
+                    className="rounded-full border border-border bg-background px-3 py-1 font-mono text-xs"
+                  >
+                    <option value="USD">USD ($)</option>
+                    <option value="TZS">TZS (Shs)</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Client / Partner Name
+                    </label>
+                    <input
+                      value={invoiceDraft.clientName}
+                      onChange={(e) =>
+                        setInvoiceDraft((p) => ({
+                          ...p,
+                          clientName: e.target.value,
+                        }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Organization / Studio
+                    </label>
+                    <input
+                      value={invoiceDraft.clientOrg}
+                      onChange={(e) =>
+                        setInvoiceDraft((p) => ({
+                          ...p,
+                          clientOrg: e.target.value,
+                        }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Client Email
+                    </label>
+                    <input
+                      value={invoiceDraft.clientEmail}
+                      onChange={(e) =>
+                        setInvoiceDraft((p) => ({
+                          ...p,
+                          clientEmail: e.target.value,
+                        }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Invoice Number
+                    </label>
+                    <input
+                      value={invoiceDraft.invoiceNumber}
+                      onChange={(e) =>
+                        setInvoiceDraft((p) => ({
+                          ...p,
+                          invoiceNumber: e.target.value,
+                        }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-dashed border-primary/40 bg-background p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    {invoiceDraft.clientLogoUrl ? (
+                      <img
+                        src={invoiceDraft.clientLogoUrl}
+                        alt="Client logo preview"
+                        className="h-11 w-16 rounded-lg object-contain bg-white p-1 border border-border"
+                      />
+                    ) : (
+                      <span className="grid h-11 w-16 place-items-center rounded-lg bg-secondary font-mono text-[10px] text-muted-foreground">
+                        NO LOGO
+                      </span>
+                    )}
+                    <div>
+                      <div className="text-xs font-semibold">
+                        Client / Agency Logo
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Embeds crisply at top-right of PDF header
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {invoiceDraft.clientLogoUrl && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setInvoiceDraft((p) => ({ ...p, clientLogoUrl: "" }))
+                        }
+                        className="cursor-pointer rounded-full border border-border px-3 py-1.5 text-[11px]"
+                      >
+                        Clear
+                      </button>
+                    )}
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground">
+                      <Upload className="h-3.5 w-3.5" />
+                      Upload Client Logo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleClientLogoUpload(e, "invoice")}
+                        className="sr-only"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                      Cost Breakdown Line Items
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddInvoiceItem}
+                      className="cursor-pointer inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-primary"
                     >
-                      <div className="relative aspect-[3/2] overflow-hidden rounded-2xl border border-border">
-                        <img
-                          src={asset.url}
-                          alt={asset.label}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
+                      <Plus className="h-3.5 w-3.5" /> Add Row
+                    </button>
+                  </div>
+
+                  {invoiceDraft.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-border bg-background p-3 space-y-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={item.category}
+                          onChange={(e) =>
+                            handleUpdateInvoiceItem(item.id, {
+                              category: e.target.value,
+                            })
+                          }
+                          placeholder="Category"
+                          className="w-40 rounded-lg border border-border bg-card px-2.5 py-1 font-mono text-[11px]"
                         />
-                        <span className="absolute top-2 left-2 rounded-full bg-black/65 px-2.5 py-0.5 font-mono text-[9.5px] text-white uppercase">
-                          {asset.source}
-                        </span>
-                      </div>
-                      <div className="truncate text-sm font-medium px-1">
-                        {asset.label}
-                      </div>
-                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          value={item.qty}
+                          onChange={(e) =>
+                            handleUpdateInvoiceItem(item.id, {
+                              qty: Math.max(1, Number(e.target.value)),
+                            })
+                          }
+                          className="w-16 rounded-lg border border-border bg-card px-2 py-1 text-center font-mono text-xs"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.unitPriceUsd}
+                          onChange={(e) =>
+                            handleUpdateInvoiceItem(item.id, {
+                              unitPriceUsd: Math.max(0, Number(e.target.value)),
+                            })
+                          }
+                          className="w-24 rounded-lg border border-border bg-card px-2 py-1 text-right font-mono text-xs"
+                        />
                         <button
                           type="button"
-                          onClick={() => handleCopy(asset.publicId, asset.url)}
-                          className="cursor-pointer flex-1 inline-flex items-center justify-center gap-1 rounded-full border border-border bg-background py-1.5 font-mono text-[10.5px]"
+                          onClick={() => handleRemoveInvoiceItem(item.id)}
+                          className="ml-auto cursor-pointer p-1 text-muted-foreground hover:text-red-500"
                         >
-                          {copiedKey === asset.publicId ? (
-                            <Check className="h-3 w-3 text-primary" />
-                          ) : (
-                            <Copy className="h-3 w-3" />
-                          )}
-                          {copiedKey === asset.publicId ? "Copied" : "Copy URL"}
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
+                      <input
+                        value={item.description}
+                        onChange={(e) =>
+                          handleUpdateInvoiceItem(item.id, {
+                            description: e.target.value,
+                          })
+                        }
+                        className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs"
+                      />
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
 
-            {/* =========================================================== */}
-            {/* TAB: FIREBASE, ENV & FIRESTORE SETUP                        */}
-            {/* =========================================================== */}
-            {tab === "setup" && (
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div
-                  data-dash-reveal
-                  className="rounded-3xl border border-border bg-card p-6 space-y-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <h2 className="font-serif text-2xl font-semibold">
-                      1. Environment Keys (.env / Vercel)
-                    </h2>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy("env", ENV_TEMPLATE)}
-                      className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 font-mono text-[11px]"
-                    >
-                      {copiedKey === "env" ? (
-                        <Check className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5" />
-                      )}
-                      Copy
-                    </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Park Levy / Tax %
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={25}
+                      value={invoiceDraft.taxPct}
+                      onChange={(e) =>
+                        setInvoiceDraft((p) => ({
+                          ...p,
+                          taxPct: Number(e.target.value),
+                        }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs"
+                    />
                   </div>
-                  <pre className="overflow-x-auto rounded-2xl border border-border bg-[#08100c] p-4 font-mono text-[11px] leading-relaxed text-[#d7eee1]">
-                    {ENV_TEMPLATE}
-                  </pre>
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Deposit Due %
+                    </label>
+                    <input
+                      type="number"
+                      min={10}
+                      max={100}
+                      value={invoiceDraft.depositPct}
+                      onChange={(e) =>
+                        setInvoiceDraft((p) => ({
+                          ...p,
+                          depositPct: Number(e.target.value),
+                        }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs"
+                    />
+                  </div>
                 </div>
 
-                <div
-                  data-dash-reveal
-                  className="rounded-3xl border border-border bg-card p-6 space-y-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <h2 className="font-serif text-2xl font-semibold">
-                      2. Firestore Security Rules (Admin + Client Portal)
-                    </h2>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy("rules", FIRESTORE_RULES)}
-                      className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 font-mono text-[11px]"
-                    >
-                      {copiedKey === "rules" ? (
-                        <Check className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5" />
-                      )}
-                      Copy
-                    </button>
-                  </div>
-                  <pre className="overflow-x-auto rounded-2xl border border-border bg-[#08100c] p-4 font-mono text-[11px] leading-relaxed text-[#d7eee1]">
-                    {FIRESTORE_RULES}
-                  </pre>
+                <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    disabled={generatingPdf}
+                    className="flex-1 cursor-pointer inline-flex items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-xs font-semibold text-primary-foreground shadow"
+                  >
+                    {generatingPdf ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    Download Branded PDF Invoice
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEmailInvoice}
+                    disabled={sendingMail}
+                    className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-full border border-border bg-background px-5 py-3.5 text-xs font-semibold hover:bg-secondary"
+                  >
+                    <Mail className="h-4 w-4 text-primary" />
+                    Email Invoice
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Live Branded A4 Paper Preview */}
+              <div
+                data-dash-reveal
+                className="overflow-hidden rounded-3xl border border-border bg-white text-[#14211a] shadow-2xl"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b-2 border-[#e5a853] bg-[#08100c] px-6 py-5 text-white">
+                  <div>
+                    <div className="font-serif text-xl font-bold tracking-wide">
+                      KIBO &amp; PLAINS
+                    </div>
+                    <div className="font-mono text-[10px] text-[#e5a853]">
+                      ARUSHA &amp; MOSHI · TANAPA &amp; KPAP CERTIFIED
+                    </div>
+                  </div>
+
+                  {invoiceDraft.clientLogoUrl ? (
+                    <div className="rounded-xl bg-white p-1.5 shadow">
+                      <img
+                        src={invoiceDraft.clientLogoUrl}
+                        alt="Client Logo"
+                        className="h-10 max-w-[120px] object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-right font-mono">
+                      <div className="text-xs font-bold text-[#e5a853]">
+                        OFFICIAL INVOICE
+                      </div>
+                      <div className="text-[11px] text-white/80">
+                        {invoiceDraft.invoiceNumber}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-6 space-y-5">
+                  <div className="flex flex-wrap justify-between gap-4 rounded-2xl border border-[#d6e4dc] bg-[#f4f8f5] p-4 text-xs">
+                    <div>
+                      <div className="font-mono text-[9.5px] uppercase tracking-wider text-[#145131] font-bold">
+                        Billed To
+                      </div>
+                      <div className="mt-1 text-base font-bold">
+                        {invoiceDraft.clientName}
+                      </div>
+                      <div className="text-[#54665c]">
+                        {invoiceDraft.clientOrg} · {invoiceDraft.clientEmail}
+                      </div>
+                      <div className="mt-1 font-semibold text-[#145131]">
+                        {invoiceDraft.tripTitle}
+                      </div>
+                    </div>
+                    <div className="font-mono text-[11px] text-right space-y-0.5 text-[#54665c]">
+                      <div>
+                        <strong className="text-[#14211a]">
+                          {invoiceDraft.invoiceNumber}
+                        </strong>
+                      </div>
+                      <div>Issued: {invoiceDraft.issueDate}</div>
+                      <div>Due: {invoiceDraft.dueDate}</div>
+                      <div>Currency: {invoiceDraft.currency}</div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[#145131]/20 bg-[#145131] text-white font-mono text-[10px]">
+                          <th className="rounded-l-lg px-3 py-2 text-left">
+                            BREAKDOWN ITEM
+                          </th>
+                          <th className="px-2 py-2 text-right">QTY</th>
+                          <th className="px-2 py-2 text-right">UNIT</th>
+                          <th className="rounded-r-lg px-3 py-2 text-right">
+                            TOTAL
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#e2eee7]">
+                        {invoiceDraft.items.map((item) => (
+                          <tr key={item.id}>
+                            <td className="px-3 py-2.5">
+                              <div className="font-mono text-[9.5px] font-bold uppercase text-[#b86f2d]">
+                                {item.category}
+                              </div>
+                              <div className="text-[#14211a]">
+                                {item.description}
+                              </div>
+                            </td>
+                            <td className="px-2 py-2.5 text-right font-mono">
+                              {item.qty}
+                            </td>
+                            <td className="px-2 py-2.5 text-right font-mono">
+                              {formatMoney(item.unitPriceUsd, invoiceDraft)}
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono font-bold">
+                              {formatMoney(
+                                item.qty * item.unitPriceUsd,
+                                invoiceDraft
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-[#f4f8f5] p-3.5 text-[11px] text-[#54665c]">
+                      <div className="font-mono text-[9.5px] font-bold uppercase text-[#145131] mb-1">
+                        Payment Channels
+                      </div>
+                      {invoiceDraft.notes}
+                    </div>
+
+                    <div className="rounded-2xl bg-[#08100c] p-4 text-white font-mono text-xs space-y-1.5">
+                      <div className="flex justify-between text-white/75">
+                        <span>Subtotal</span>
+                        <span>
+                          {formatMoney(invoiceTotals.subtotal, invoiceDraft)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-white/75">
+                        <span>Levy / Tax ({invoiceDraft.taxPct}%)</span>
+                        <span>{formatMoney(invoiceTotals.tax, invoiceDraft)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-white/15 pt-1.5 text-sm font-bold">
+                        <span>Total</span>
+                        <span className="text-[#e5a853]">
+                          {formatMoney(invoiceTotals.total, invoiceDraft)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-[#62b388]">
+                        <span>Deposit ({invoiceDraft.depositPct}%)</span>
+                        <span>
+                          {formatMoney(invoiceTotals.deposit, invoiceDraft)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================== */}
+          {/* TAB: EXPEDITIONS                                            */}
+          {/* =========================================================== */}
+          {tab === "expeditions" && (
+            <div className="grid gap-7 xl:grid-cols-[0.88fr_1.12fr] xl:items-start">
+              <form
+                data-dash-reveal
+                onSubmit={handleAddExpedition}
+                className="rounded-3xl border border-border bg-card/95 p-6 space-y-4"
+              >
+                <h2 className="font-serif text-2xl font-semibold flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-primary" />
+                  Add Expedition Package
+                </h2>
+                <div>
+                  <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Title
+                  </label>
+                  <input
+                    required
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="7-Day Serengeti Calving Fly-In"
+                    className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    value={newSwahili}
+                    onChange={(e) => setNewSwahili(e.target.value)}
+                    placeholder="Swahili Tagline"
+                    className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                  />
+                  <select
+                    value={newCategory}
+                    onChange={(e) =>
+                      setNewCategory(
+                        e.target.value as AdminExpeditionItem["category"]
+                      )
+                    }
+                    className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                  >
+                    <option value="Kilimanjaro">Kilimanjaro</option>
+                    <option value="Northern Circuit">Northern Circuit</option>
+                    <option value="Southern & Western">
+                      Southern &amp; Western
+                    </option>
+                    <option value="Coast">Coast</option>
+                  </select>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    type="number"
+                    value={newDays}
+                    onChange={(e) => setNewDays(Number(e.target.value))}
+                    className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                  />
+                  <input
+                    type="number"
+                    value={newPrice}
+                    onChange={(e) => setNewPrice(Number(e.target.value))}
+                    className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+                <input
+                  value={newImage}
+                  onChange={(e) => setNewImage(e.target.value)}
+                  placeholder="Image URL"
+                  className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 font-mono text-xs"
+                />
+                <textarea
+                  rows={2}
+                  value={newSummary}
+                  onChange={(e) => setNewSummary(e.target.value)}
+                  placeholder="Highlights summary..."
+                  className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                />
+                <button
+                  type="submit"
+                  className="w-full cursor-pointer rounded-full bg-primary py-3 text-sm font-semibold text-primary-foreground"
+                >
+                  Save Package
+                </button>
+              </form>
+
+              <div className="space-y-4">
+                {expeditions.map((exp) => (
+                  <div
+                    key={exp.id}
+                    data-dash-reveal
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-3xl border border-border bg-card/95 p-4"
+                  >
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={exp.featuredImage}
+                        alt={exp.title}
+                        className="h-16 w-24 shrink-0 rounded-2xl object-cover border border-border"
+                      />
+                      <div>
+                        <span className="font-mono text-[10px] uppercase tracking-wider text-primary">
+                          {exp.category} · {exp.durationDays}D · From $
+                          {exp.priceFromUsd.toLocaleString()}
+                        </span>
+                        <h3 className="font-serif text-xl font-semibold">
+                          {exp.title}
+                        </h3>
+                        <p className="text-xs text-muted-foreground line-clamp-1">
+                          {exp.summary}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePublished(exp)}
+                        className="cursor-pointer rounded-full border border-border bg-background p-2"
+                      >
+                        {exp.published ? (
+                          <Eye className="h-4 w-4 text-primary" />
+                        ) : (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteExpedition(exp.id)}
+                        className="cursor-pointer rounded-full border border-border bg-background p-2 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================== */}
+          {/* TAB: INQUIRIES & NODEMAILER DISPATCH                        */}
+          {/* =========================================================== */}
+          {tab === "inquiries" && (
+            <div className="grid gap-7 xl:grid-cols-[1.05fr_0.95fr] xl:items-start">
+              <div className="space-y-4">
+                {inquiries.map((inq) => (
+                  <div
+                    key={inq.id}
+                    data-dash-reveal
+                    className="rounded-3xl border border-border bg-card/95 p-5 space-y-3"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="font-serif text-xl font-semibold">
+                          {inq.guestName}
+                        </div>
+                        <div className="font-mono text-xs text-muted-foreground">
+                          {inq.guestEmail} · {inq.travelers} guests ·{" "}
+                          {inq.month} 2027
+                        </div>
+                      </div>
+                      <select
+                        value={inq.status}
+                        onChange={(e) =>
+                          handleInquiryStatus(
+                            inq,
+                            e.target.value as AdminInquiryItem["status"]
+                          )
+                        }
+                        className="rounded-full border border-border bg-background px-3 py-1 font-mono text-[11px]"
+                      >
+                        <option value="new">NEW</option>
+                        <option value="quoted">QUOTED</option>
+                        <option value="confirmed">CONFIRMED</option>
+                        <option value="archived">ARCHIVED</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-wrap gap-2 font-mono text-[11px] text-muted-foreground">
+                      <span className="rounded-full bg-secondary px-2.5 py-0.5 text-foreground uppercase">
+                        {inq.focus}
+                      </span>
+                      <span>{inq.totalDays} days</span>
+                      <span>· ${inq.estimatePerPerson.toLocaleString()} pp</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMailTo(inq.guestEmail);
+                          setMailGuestName(inq.guestName);
+                          setMailTemplate("welcome");
+                          setMailSubject(
+                            `Karibu Tanzania — Your ${inq.totalDays}-Day Kibo & Plains Dossier`
+                          );
+                        }}
+                        className="cursor-pointer inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        Load into Mail Composer
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <form
+                data-dash-reveal
+                onSubmit={handleSendMail}
+                className="rounded-3xl border border-border bg-card/95 p-6 space-y-4 xl:sticky xl:top-24"
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="font-serif text-2xl font-semibold">
+                    Nodemailer Custom Dispatcher
+                  </h2>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold ${
+                      health.nodemailer
+                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                        : "bg-amber-500/15 text-[#b86f2d] dark:text-[#e5a853]"
+                    }`}
+                  >
+                    {health.nodemailer ? "SMTP LIVE" : "PREVIEW READY"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 rounded-full border border-border bg-background p-1">
+                  {(["welcome", "invoice", "quote"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setMailTemplate(t)}
+                      className={`cursor-pointer rounded-full py-1.5 font-mono text-[10.5px] uppercase ${
+                        mailTemplate === t
+                          ? "bg-primary text-primary-foreground font-semibold"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    required
+                    type="email"
+                    value={mailTo}
+                    onChange={(e) => setMailTo(e.target.value)}
+                    placeholder="Guest Email"
+                    className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                  />
+                  <input
+                    value={mailGuestName}
+                    onChange={(e) => setMailGuestName(e.target.value)}
+                    placeholder="Guest Name"
+                    className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+                <input
+                  required
+                  value={mailSubject}
+                  onChange={(e) => setMailSubject(e.target.value)}
+                  placeholder="Subject"
+                  className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                />
+                <input
+                  value={mailHeadline}
+                  onChange={(e) => setMailHeadline(e.target.value)}
+                  placeholder="Banner Headline"
+                  className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                />
+                <textarea
+                  required
+                  rows={5}
+                  value={mailMessage}
+                  onChange={(e) => setMailMessage(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={sendingMail}
+                  className="w-full cursor-pointer inline-flex items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  {sendingMail ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Dispatch Custom Branded Email
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* =========================================================== */}
+          {/* TAB: CLOUDINARY MEDIA                                       */}
+          {/* =========================================================== */}
+          {tab === "media" && (
+            <div className="space-y-6">
+              <div
+                data-dash-reveal
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl border border-border bg-card/95 p-6"
+              >
+                <div>
+                  <h2 className="font-serif text-2xl font-semibold">
+                    Cloudinary Media Studio
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Optimized WebP/AVIF uploads via <code>/api/cloudinary/upload</code>
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <select
+                    value={uploadFolder}
+                    onChange={(e) => setUploadFolder(e.target.value)}
+                    className="rounded-full border border-border bg-background px-4 py-2 font-mono text-xs"
+                  >
+                    <option value="kibo-plains/expeditions">
+                      kibo-plains/expeditions
+                    </option>
+                    <option value="kibo-plains/parks">kibo-plains/parks</option>
+                    <option value="kibo-plains/kilimanjaro">
+                      kibo-plains/kilimanjaro
+                    </option>
+                    <option value="kibo-plains/fleet">kibo-plains/fleet</option>
+                  </select>
+                  <label className="cursor-pointer inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow">
+                    {uploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CloudUpload className="h-4 w-4" />
+                    )}
+                    Upload Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCloudinaryUpload}
+                      className="sr-only"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {mediaAssets.map((asset) => (
+                  <div
+                    key={asset.publicId}
+                    data-dash-reveal
+                    className="rounded-3xl border border-border bg-card/95 p-3 space-y-2.5"
+                  >
+                    <div className="relative aspect-[3/2] overflow-hidden rounded-2xl border border-border">
+                      <img
+                        src={asset.url}
+                        alt={asset.label}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                      <span className="absolute top-2 left-2 rounded-full bg-black/65 px-2.5 py-0.5 font-mono text-[9.5px] text-white uppercase">
+                        {asset.source}
+                      </span>
+                    </div>
+                    <div className="truncate text-sm font-medium px-1">
+                      {asset.label}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(asset.publicId, asset.url)}
+                        className="cursor-pointer flex-1 inline-flex items-center justify-center gap-1 rounded-full border border-border bg-background py-1.5 font-mono text-[10.5px]"
+                      >
+                        {copiedKey === asset.publicId ? (
+                          <Check className="h-3 w-3 text-primary" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                        {copiedKey === asset.publicId ? "Copied" : "Copy URL"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSiteSettings((s) => ({
+                            ...s,
+                            heroBackdrop: asset.url,
+                          }));
+                          setTab("site");
+                          notify(`Selected "${asset.label}" as Hero Backdrop`);
+                        }}
+                        className="cursor-pointer rounded-full bg-primary/15 px-3 py-1.5 font-mono text-[10.5px] font-semibold text-primary"
+                      >
+                        Set Hero
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================== */}
+          {/* TAB: KEYS & FIRESTORE SETUP                                 */}
+          {/* =========================================================== */}
+          {tab === "setup" && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div
+                data-dash-reveal
+                className="rounded-3xl border border-border bg-card/95 p-6 space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="font-serif text-2xl font-semibold">
+                    1. Environment Keys (.env / Vercel)
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("env", ENV_TEMPLATE)}
+                    className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 font-mono text-[11px]"
+                  >
+                    {copiedKey === "env" ? (
+                      <Check className="h-3.5 w-3.5 text-primary" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                    Copy
+                  </button>
+                </div>
+                <pre className="overflow-x-auto rounded-2xl border border-border bg-[#08100c] p-4 font-mono text-[11px] leading-relaxed text-[#d7eee1]">
+                  {ENV_TEMPLATE}
+                </pre>
+              </div>
+
+              <div
+                data-dash-reveal
+                className="rounded-3xl border border-border bg-card/95 p-6 space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="font-serif text-2xl font-semibold">
+                    2. Firestore Security Rules
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("rules", FIRESTORE_RULES)}
+                    className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 font-mono text-[11px]"
+                  >
+                    {copiedKey === "rules" ? (
+                      <Check className="h-3.5 w-3.5 text-primary" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                    Copy
+                  </button>
+                </div>
+                <pre className="overflow-x-auto rounded-2xl border border-border bg-[#08100c] p-4 font-mono text-[11px] leading-relaxed text-[#d7eee1]">
+                  {FIRESTORE_RULES}
+                </pre>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

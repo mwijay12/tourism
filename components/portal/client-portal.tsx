@@ -25,7 +25,9 @@ import {
   type AdminClientRecord,
 } from "@/lib/firebase/admin-types";
 import { formatMoney, generateInvoicePdf } from "@/lib/pdf/generate-invoice-pdf";
+import { TransitionLink } from "@/components/creative/transition-provider";
 import {
+  ArrowLeft,
   Calendar,
   CheckCircle2,
   Compass,
@@ -173,8 +175,20 @@ export function ClientPortal() {
 
   if (!user && !demoUnlocked) {
     return (
-      <div className="min-h-screen bg-background pt-28 pb-24 text-foreground">
-        <div className="mx-auto max-w-xl px-5">
+      <div className="min-h-screen flex flex-col justify-between bg-background px-5 py-8 text-foreground">
+        <header className="mx-auto flex w-full max-w-5xl items-center justify-between">
+          <span className="font-serif text-xl font-semibold">
+            Kibo &amp; Plains <span className="text-primary">· Portal</span>
+          </span>
+          <TransitionLink
+            href="/"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-1.5 font-mono text-xs hover:bg-secondary"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Public Site
+          </TransitionLink>
+        </header>
+
+        <div className="mx-auto my-auto max-w-xl w-full py-10">
           <div className="rounded-3xl border border-border bg-card p-8 sm:p-10 shadow-xl space-y-6 text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.2em] text-primary">
               <Compass className="h-3.5 w-3.5" />
@@ -215,6 +229,9 @@ export function ClientPortal() {
             </div>
           </div>
         </div>
+        <footer className="mx-auto w-full max-w-5xl text-center font-mono text-[11px] text-muted-foreground">
+          Kibo &amp; Plains Expeditions · Arusha &amp; Moshi · Tanzania
+        </footer>
       </div>
     );
   }
@@ -229,7 +246,23 @@ export function ClientPortal() {
   );
 
   return (
-    <div className="min-h-screen bg-background pt-28 pb-24 text-foreground">
+    <div className="min-h-screen bg-background pb-20 text-foreground">
+      {/* Standalone Portal Topbar */}
+      <header className="sticky top-0 z-40 h-16 border-b border-border bg-background/85 backdrop-blur-xl mb-8">
+        <div className="mx-auto flex h-full max-w-[1160px] items-center justify-between px-4 sm:px-8">
+          <div className="flex items-center gap-3">
+            <span className="font-serif text-lg sm:text-xl font-semibold">
+              Kibo &amp; Plains <span className="text-primary">· Client Hub</span>
+            </span>
+          </div>
+          <TransitionLink
+            href="/"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 font-mono text-xs hover:bg-secondary"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Public Site
+          </TransitionLink>
+        </div>
+      </header>
       {toast && (
         <div className="fixed top-20 right-4 z-[150] flex items-center gap-2 rounded-full border border-primary/40 bg-[#08100c] px-4 py-2.5 text-xs font-medium text-white shadow-2xl">
           <CheckCircle2 className="h-4 w-4 text-[#e5a853]" />
