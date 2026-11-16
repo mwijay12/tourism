@@ -39,6 +39,7 @@ export function SiteFooter() {
         {
           title: "Legal & Studio",
           links: [
+            { label: "Admin Console", href: "/admin", badge: "Auth" },
             { label: "Terms & Conditions", href: "/terms" },
             { label: "Privacy & PDPA 2022", href: "/privacy" },
             { label: "Altraware Technology", href: "https://altraware-tech.vercel.app/" },

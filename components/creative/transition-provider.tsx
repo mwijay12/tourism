@@ -46,6 +46,11 @@ const ROUTE_META: Record<string, TransitionMeta> = {
     coords: "TANZANIA PDPA 2022",
     swahili: "Faragha na Usalama",
   },
+  "/admin": {
+    title: "Mission Control",
+    coords: "FIREBASE · CLOUDINARY · SMTP",
+    swahili: "Usimamizi wa Safari",
+  },
 };
 
 function resolveMeta(href: string, customLabel?: string): TransitionMeta {
