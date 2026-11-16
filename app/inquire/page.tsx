@@ -3,7 +3,9 @@
 import React, { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { KILIMANJARO_ROUTES, NATIONAL_PARKS } from "@/lib/tanzania-data";
-import { Check, Compass, MessageCircle, Mountain, Send, ShieldCheck } from "lucide-react";
+import { getFirebaseServices, isFirebaseConfigured } from "@/lib/firebase/client";
+import { addDoc, collection } from "firebase/firestore";
+import { Check, Compass, Loader2, MessageCircle, Mountain, Send, ShieldCheck } from "lucide-react";
 import { TransitionLink } from "@/components/creative/transition-provider";
 
 const MONTHS = [
@@ -39,7 +41,12 @@ function InquireConfigurator() {
   const [tier, setTier] = useState<"Signature Tented" | "Ultra-Luxury Fly-In">("Signature Tented");
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [dispatchStatus, setDispatchStatus] = useState<{
+    mailSent: boolean;
+    savedCloud: boolean;
+  } | null>(null);
 
   const togglePark = (slug: string) => {
     setSelectedParks((prev) =>
@@ -56,6 +63,69 @@ function InquireConfigurator() {
     const perPerson = Math.round(kiliBase + safariDays * dailyRate);
     return { totalDays, perPerson };
   }, [focus, kiliRoute, selectedParks.length, tier]);
+
+  const handleSubmitInquiry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    let mailSent = false;
+    let savedCloud = false;
+
+    try {
+      const res = await fetch("/api/inquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guestName,
+          guestEmail,
+          focus,
+          kiliRoute,
+          selectedParks,
+          travelers,
+          month,
+          tier,
+          totalDays: estimate.totalDays,
+          estimatePerPerson: estimate.perPerson,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        mailSent = Boolean(json.mailSent);
+      }
+    } catch {
+      // ignore network error; fallback handled cleanly below
+    }
+
+    if (isFirebaseConfigured) {
+      try {
+        const fb = getFirebaseServices();
+        if (fb) {
+          await addDoc(collection(fb.db, "inquiries"), {
+            guestName,
+            guestEmail,
+            focus,
+            kiliRoute,
+            selectedParks,
+            travelers,
+            month,
+            tier,
+            totalDays: estimate.totalDays,
+            estimatePerPerson: estimate.perPerson,
+            status: "new",
+            mailSent,
+            createdAt: new Date().toISOString(),
+          });
+          savedCloud = true;
+        }
+      } catch {
+        // Firestore rule or unconfigured fallback
+      }
+    }
+
+    setDispatchStatus({ mailSent, savedCloud });
+    setSubmitted(true);
+    setSubmitting(false);
+  };
 
   return (
     <div className="pt-28 pb-24 bg-background text-foreground">
@@ -75,10 +145,7 @@ function InquireConfigurator() {
         <div className="mt-12 grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
           {/* Form Left */}
           <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSubmitted(true);
-            }}
+            onSubmit={handleSubmitInquiry}
             className="space-y-8 rounded-3xl border border-border bg-card p-6 sm:p-9 shadow-sm"
           >
             {/* 1. Journey Focus */}
@@ -278,10 +345,20 @@ function InquireConfigurator() {
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 type="submit"
-                className="cursor-pointer inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-6 py-4 text-sm font-semibold text-primary-foreground shadow transition hover:opacity-90"
+                disabled={submitting}
+                className="cursor-pointer inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-6 py-4 text-sm font-semibold text-primary-foreground shadow transition hover:opacity-90 disabled:opacity-60"
               >
-                <Send className="h-4 w-4" />
-                Request Arusha Dossier
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Dispatching Dossier...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Request Arusha Dossier
+                  </>
+                )}
               </button>
               <a
                 href={`https://wa.me/255792867427?text=${encodeURIComponent(
@@ -309,10 +386,20 @@ function InquireConfigurator() {
             </p>
 
             {submitted && (
-              <div className="rounded-2xl border border-primary/30 bg-primary/10 p-5 text-sm text-foreground">
-                <strong>Asante sana, {guestName || "Explorer"}!</strong> Your {estimate.totalDays}-day Tanzania dossier draft for{" "}
-                <strong>{month} 2027</strong> ({travelers} travelers) has been prepared. Our Arusha &amp; Moshi specialists will follow up at{" "}
-                <strong>{guestEmail}</strong>.
+              <div className="rounded-2xl border border-primary/30 bg-primary/10 p-5 text-sm text-foreground space-y-1.5">
+                <div>
+                  <strong>Asante sana, {guestName || "Explorer"}!</strong> Your {estimate.totalDays}-day Tanzania dossier draft for{" "}
+                  <strong>{month} 2027</strong> ({travelers} travelers) has been prepared. Our Arusha &amp; Moshi specialists will follow up at{" "}
+                  <strong>{guestEmail}</strong>.
+                </div>
+                {dispatchStatus && (
+                  <div className="font-mono text-[11px] text-primary">
+                    {dispatchStatus.mailSent
+                      ? "✓ Confirmation dossier emailed via Nodemailer SMTP."
+                      : "• Instant dossier ready (add SMTP keys in .env.local to auto-email)."}
+                    {dispatchStatus.savedCloud ? " · ✓ Saved to Firebase Firestore." : ""}
+                  </div>
+                )}
               </div>
             )}
           </form>

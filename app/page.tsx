@@ -2,6 +2,7 @@ import React from "react";
 import ParallaxHero from "@/components/ui/wilderness";
 import { WebGLTerrainShader } from "@/components/creative/webgl-terrain-shader";
 import { KilimanjaroRouteChart } from "@/components/creative/kilimanjaro-route-chart";
+import { ScrollExpeditionReel } from "@/components/creative/scroll-expedition-reel";
 import { ParksShowcase } from "@/components/site/parks-showcase";
 import { MigrationTimeline } from "@/components/site/migration-timeline";
 import { ExpeditionsShowcase } from "@/components/site/expeditions-showcase";
@@ -96,7 +97,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4. Animated Field Instruments & Expedition SVGs */}
+      {/* 4. Scroll-Animated Cinematic Aerial Expedition Reel & Curved SVG Flight Arc */}
+      <ScrollExpeditionReel />
+
+      {/* 5. Animated Field Instruments & Realistic Expedition Photography */}
       <ExpeditionInstruments />
 
       {/* 5. Tanzania National Parks & Wildlife Atlas (WebGL Hover + GSAP) */}

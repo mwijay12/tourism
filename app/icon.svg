@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="kiboBg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10291d"/>
+      <stop offset="100%" stop-color="#050e09"/>
+    </linearGradient>
+    <radialGradient id="kiboSun" cx="0.5" cy="0.45" r="0.52">
+      <stop offset="0%" stop-color="#fff0c1"/>
+      <stop offset="55%" stop-color="#e5a853"/>
+      <stop offset="100%" stop-color="#c37424"/>
+    </radialGradient>
+    <linearGradient id="kiboGold" x1="16" y1="60" x2="48" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#b86f2d"/>
+      <stop offset="55%" stop-color="#e5a853"/>
+      <stop offset="100%" stop-color="#ffe09e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Obsidian-emerald rounded tile with thin gold edge -->
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#kiboBg)"/>
+  <rect x="3" y="3" width="58" height="58" rx="14" stroke="#e5a853" stroke-width="1.8" stroke-opacity="0.72"/>
+
+  <!-- Radiant golden African sun behind flat Kibo crater -->
+  <circle cx="32" cy="23.5" r="12.5" fill="url(#kiboSun)"/>
+
+  <!-- Kilimanjaro broad flat-crowned volcanic slope -->
+  <path d="M4 41 C14 37 22 30 26.8 23.2 L37.2 23.2 C42 30 50 37 60 41 L60 58 C60 59.5 59 60 57 60 L7 60 C5 60 4 59.5 4 58 Z" fill="#08160f"/>
+
+  <!-- Pure glacier snow cap & volcanic gullies -->
+  <path d="M26.8 23.2 L37.2 23.2 L44.8 31.6 L39.2 29.4 L36.5 32.8 L34.2 28.6 L32 33.4 L29.6 28.8 L26.5 32.4 L24.2 29.2 L19.2 31.6 Z" fill="#f7f3e9"/>
+
+  <!-- Rolling savannah ridges -->
+  <path d="M4 42 C18 37.5 30 43.5 42 39.5 C50 37 55 39 60 41" stroke="#2e7c52" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+
+  <!-- Winding S-curved golden expedition trail -->
+  <path d="M22 60 C17 50 45 49 42 42 C40 38.5 33 38 29 36.8 C34.5 37.8 44.5 38.2 46 42.5 C48.5 50.5 25 51.5 28 60 Z" fill="url(#kiboGold)"/>
+</svg>

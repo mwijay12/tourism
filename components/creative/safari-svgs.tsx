@@ -8,479 +8,420 @@ interface SvgProps {
 }
 
 /**
- * 1. Kilimanjaro Tri-Peak Azimuth Compass
- * Multi-ring topographic degree dial, rotating reticle, Shira/Kibo/Mawenzi profile,
- * oscillating magnetic pointer, and Uhuru Summit beacon pulse.
+ * 01 / ALTITUDE — Kilimanjaro Elevation & Azimuth Compass Blueprint
+ * Pure Motion Lab stroke drawing (360×260) driven by GSAP DrawSVGPlugin + MotionPathPlugin.
  */
 export function KilimanjaroCompassSvg({ className }: SvgProps) {
   return (
     <svg
-      viewBox="0 0 140 140"
-      fill="none"
-      className={cn("safari-svg text-primary", className)}
+      viewBox="0 0 360 260"
+      className={cn("ml-art", className)}
       aria-hidden="true"
+      focusable="false"
+      data-draw
+      data-draw-step="0.05"
     >
-      {/* Subtle topographic radar rings */}
-      <circle cx="70" cy="48" r="14" stroke="#e5a853" strokeWidth="1" opacity="0.25">
-        <animate attributeName="r" values="6;28" dur="3.2s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="0.65;0" dur="3.2s" repeatCount="indefinite" />
-      </circle>
-
-      {/* Outer rotating azimuth degree ring */}
-      <g className="svg-spin-slow" style={{ transformOrigin: "70px 70px" }}>
-        <circle
-          cx="70"
-          cy="70"
-          r="58"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeDasharray="3 5"
-          opacity="0.45"
-        />
-        <circle
-          cx="70"
-          cy="70"
-          r="50"
-          stroke="currentColor"
-          strokeWidth="0.9"
-          strokeDasharray="1 7"
-          opacity="0.35"
-        />
-        {/* Cardinal ticks */}
-        <path
-          d="M70 7V15 M70 125V133 M7 70H15 M125 70H133"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <path
-          d="M25 25L31 31 M115 25L109 31 M25 115L31 109 M115 115L109 109"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinecap="round"
-          opacity="0.6"
-        />
-      </g>
-
-      {/* Inner horizon frame */}
-      <circle
-        cx="70"
-        cy="70"
-        r="41"
-        fill="currentColor"
-        fillOpacity="0.04"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeOpacity="0.28"
-      />
-
-      {/* Kilimanjaro Shira / Kibo / Mawenzi silhouette */}
-      <path
-        className="svg-draw-path"
-        d="M32 86 L49 65 L58 72 L70 46 L83 68 L93 56 L108 86 Z"
-        fill="currentColor"
-        fillOpacity="0.14"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      {/* Glacial ice dome */}
-      <path
-        d="M62 59 L70 46 L79 59 L74 62 L70 57 L66 62 Z"
-        fill="#e5a853"
-        opacity="0.95"
-      />
-
-      {/* Oscillating compass needle */}
-      <g className="svg-needle" style={{ transformOrigin: "70px 70px" }}>
-        <polygon points="70,22 74,67 66,67" fill="#e5a853" />
-        <polygon points="70,118 74,73 66,73" fill="currentColor" opacity="0.28" />
-        <circle cx="70" cy="70" r="4" fill="currentColor" />
-      </g>
-
-      {/* Elevation tag */}
-      <text
-        x="70"
-        y="102"
-        textAnchor="middle"
-        className="fill-current font-mono text-[7.5px] font-semibold"
-        opacity="0.85"
-      >
-        5,895M UHURU
+      {/* Blueprint card frame */}
+      <rect x="20" y="20" width="320" height="220" rx="14" />
+      <path className="f" d="M20 58h320" />
+      <path d="M40 39h84" strokeWidth="2" />
+      <text x="316" y="42" textAnchor="end" data-fade>
+        3°04′S · 37°21′E
       </text>
 
-      {/* Uhuru Summit Glow */}
-      <circle cx="70" cy="46" r="3.5" fill="#e5a853">
-        <animate attributeName="r" values="2.5;5.5;2.5" dur="2.4s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="1;0.3;1" dur="2.4s" repeatCount="indefinite" />
-      </circle>
+      {/* Left: Kilimanjaro Elevation Contours & Lemosho Ascent */}
+      <path className="f" d="M36 96h142M36 138h142M36 180h142" />
+      <text x="38" y="91" data-fade>
+        5,895M
+      </text>
+      <text x="38" y="133" data-fade>
+        3,850M
+      </text>
+      <path
+        d="M36 206 L64 166 L82 174 L112 102 L138 148 L156 124 L178 206"
+        strokeWidth="1.5"
+      />
+      <path className="a" d="M98 134 L112 102 L126 130 L119 134 L112 126 L105 134 Z" />
+      <path
+        id="ml-kili-route"
+        className="a"
+        d="M42 204 Q68 184, 82 174 T112 102"
+        strokeDasharray="3 4"
+      />
+      <circle className="dot" cx="112" cy="102" r="4" data-pop />
+      <circle
+        className="dot-p"
+        cx="42"
+        cy="204"
+        r="4"
+        data-travel="#ml-kili-route"
+        data-travel-time="4.2"
+      />
+
+      {/* Divider */}
+      <path className="f" d="M196 58v182" />
+
+      {/* Right: Magnetic Azimuth Compass (data-wander="38") */}
+      <circle cx="268" cy="146" r="56" data-draw-time="1.0" />
+      <circle className="f" cx="268" cy="146" r="42" />
+      <path d="M268 90v9M324 146h-9M268 202v-9M212 146h9" />
+      <path className="f" d="M307 107l-5 5M307 185l-5-5M229 185l5-5M229 107l5 5" />
+      <text x="268" y="114" textAnchor="middle" data-fade>
+        N
+      </text>
+      <text x="307" y="149" textAnchor="middle" data-fade>
+        E
+      </text>
+      <text x="268" y="185" textAnchor="middle" data-fade>
+        S
+      </text>
+      <text x="229" y="149" textAnchor="middle" data-fade>
+        W
+      </text>
+      <g data-wander="38" data-wander-cx="268" data-wander-cy="146">
+        <path className="a" d="M268 112l6 34h-12z" />
+        <path className="wash" d="M268 112l6 34h-12z" data-fade />
+        <path d="M268 180l6-34h-12z" />
+      </g>
+      <circle className="dot" cx="268" cy="146" r="3.5" data-pop />
     </svg>
   );
 }
 
 /**
- * 2. Extended 4x4 Land Cruiser Wheel + Coil Suspension Damper
- * Tire spools faster on hover/active while coil suspension compresses gently & dust streaks drift.
+ * 02 / FLEET — Extended Safari 4x4 Land Cruiser Telemetry Blueprint
  */
 export function SafariCruiserWheelSvg({ className }: SvgProps) {
   return (
     <svg
-      viewBox="0 0 140 140"
-      fill="none"
-      className={cn("safari-svg text-primary", className)}
+      viewBox="0 0 360 260"
+      className={cn("ml-art", className)}
       aria-hidden="true"
+      focusable="false"
+      data-draw
+      data-draw-step="0.05"
+      data-draw-delay="0.15"
     >
-      {/* Suspension arch & shock coil above wheel */}
+      <rect x="20" y="20" width="320" height="220" rx="14" />
+      <path className="f" d="M20 58h320" />
+      <path d="M40 39h72" strokeWidth="2" />
+      <rect className="wash" x="242" y="29" width="80" height="20" rx="10" data-fade />
+      <text className="ml-grade" x="282" y="42" textAnchor="middle" data-fade>
+        320L · 24V
+      </text>
+
+      {/* Cruiser Body Profile with Open Pop-Top Roof */}
       <path
-        d="M22 44 Q70 20 118 44"
-        stroke="currentColor"
+        d="M66 156h-8c-4 0-6-3-6-7v-26c0-5 3-8 8-8h16l14-34h124v-12h42v12h16v68c0 4-3 7-7 7h-9"
         strokeWidth="1.5"
-        strokeOpacity="0.28"
-        strokeLinecap="round"
       />
+      {/* Raised Safari Roof Hatch */}
+      <path className="a" d="M114 78l48-16h44v16" />
+      <path className="f" d="M104 92h44M158 92h44M212 92h34" />
+      {/* Rear Mounted Dual Spare & Snorkel */}
+      <rect x="274" y="106" width="12" height="36" rx="4" />
+      <path className="a" d="M76 115v-22h10" />
+
+      {/* Suspension Coils */}
+      <path className="a" d="M106 140v22M102 146l8 4-8 4 8 4" />
+      <path className="a" d="M236 140v22M232 146l8 4-8 4 8 4" />
+
+      {/* Front & Rear All-Terrain Wheels */}
+      <circle cx="106" cy="176" r="22" strokeWidth="1.6" />
+      <circle className="f" cx="106" cy="176" r="13" />
+      <circle className="dot" cx="106" cy="176" r="3.5" data-pop />
+
+      <circle cx="236" cy="176" r="22" strokeWidth="1.6" />
+      <circle className="f" cx="236" cy="176" r="13" />
+      <circle className="dot" cx="236" cy="176" r="3.5" data-pop />
+
+      {/* Corrugated Serengeti Track & Moving Traction Pulse */}
       <path
-        className="svg-draw-path"
-        d="M70 18 L70 26 L75 29 L65 33 L75 37 L65 41 L70 44"
-        stroke="#e5a853"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        id="ml-cruiser-road"
+        className="f"
+        d="M36 198h288"
+        strokeDasharray="6 6"
+      />
+      <circle
+        className="dot"
+        cx="36"
+        cy="198"
+        r="3.5"
+        data-travel="#ml-cruiser-road"
+        data-travel-time="2.8"
       />
 
-      {/* Dust streaks */}
-      <line
-        x1="14"
-        y1="122"
-        x2="126"
-        y2="122"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeDasharray="8 6"
-        opacity="0.4"
-      >
-        <animate
-          attributeName="stroke-dashoffset"
-          values="0;28"
-          dur="1.6s"
-          repeatCount="indefinite"
-        />
-      </line>
-
-      {/* Spinning all-terrain wheel */}
-      <g className="svg-wheel" style={{ transformOrigin: "70px 76px" }}>
-        <circle
-          cx="70"
-          cy="76"
-          r="42"
-          stroke="currentColor"
-          strokeWidth="7"
-          strokeDasharray="9.5 4.2"
-          opacity="0.9"
-        />
-        <circle cx="70" cy="76" r="35.5" stroke="currentColor" strokeWidth="1.5" opacity="0.42" />
-        <circle
-          cx="70"
-          cy="76"
-          r="26"
-          fill="currentColor"
-          fillOpacity="0.08"
-          stroke="currentColor"
-          strokeWidth="1.8"
-        />
-
-        {[0, 60, 120, 180, 240, 300].map((deg) => (
-          <g key={deg} transform={`rotate(${deg} 70 76)`}>
-            <path d="M70 50 L73.5 66 L66.5 66 Z" fill="currentColor" opacity="0.75" />
-            <circle cx="70" cy="68" r="2" fill="#e5a853" />
-          </g>
-        ))}
-
-        {/* Free-wheel locking hub */}
-        <circle cx="70" cy="76" r="8" fill="currentColor" />
-        <circle cx="70" cy="76" r="3.4" fill="#e5a853" />
-      </g>
+      {/* Checklist footer bar inside blueprint */}
+      <path className="f" d="M40 220h42M138 220h46M240 220h54" />
+      <circle className="dot-p" cx="92" cy="220" r="3" data-pop />
+      <circle className="dot-p" cx="194" cy="220" r="3" data-pop />
+      <circle className="dot" cx="304" cy="220" r="3" data-pop />
     </svg>
   );
 }
 
 /**
- * 3. Serengeti Great Migration Trajectory Map
- * Multi-contour Rift Valley basin with 4 SMIL herd dots flowing across river crossings.
+ * 03 / ECOLOGY — Great Migration Basin & GPS Caravan Loop
  */
 export function MigrationArcSvg({ className }: SvgProps) {
   return (
     <svg
-      viewBox="0 0 140 140"
-      fill="none"
-      className={cn("safari-svg text-primary", className)}
+      viewBox="0 0 360 260"
+      className={cn("ml-art", className)}
       aria-hidden="true"
+      focusable="false"
+      data-draw
+      data-draw-step="0.05"
+      data-draw-delay="0.25"
     >
-      {/* Topographic terrain rings */}
-      <ellipse cx="70" cy="70" rx="58" ry="40" stroke="currentColor" strokeWidth="1" opacity="0.16" />
-      <ellipse cx="70" cy="70" rx="43" ry="29" stroke="currentColor" strokeWidth="1" opacity="0.22" />
-      <ellipse cx="70" cy="70" rx="26" ry="17" stroke="currentColor" strokeWidth="1" opacity="0.16" />
+      <rect x="20" y="20" width="320" height="220" rx="14" />
+      <path className="f" d="M20 58h320" />
+      <path d="M40 39h80" strokeWidth="2" />
+      <text x="316" y="42" textAnchor="end" data-fade>
+        2°19′S · SIRINGET
+      </text>
 
-      {/* Mara & Grumeti river ribbons */}
-      <path
-        className="svg-draw-path"
-        d="M16 48 Q50 30, 72 48 T124 44"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeOpacity="0.32"
-        strokeLinecap="round"
-      />
-      <path
-        className="svg-draw-path"
-        d="M16 92 Q52 108, 78 88 T124 96"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeOpacity="0.32"
-        strokeLinecap="round"
-      />
+      {/* Rift Valley Basin Contours */}
+      <ellipse className="f" cx="180" cy="150" rx="126" ry="70" />
+      <ellipse className="f" cx="180" cy="150" rx="92" ry="48" />
+      <ellipse className="f" cx="180" cy="150" rx="54" ry="26" />
 
-      {/* Migration Loop Trail */}
+      {/* Mara & Grumeti River Crossings */}
+      <path d="M48 112 Q124 84, 184 114 T312 104" strokeWidth="1.4" />
+      <path className="f" d="M48 186 Q130 212, 198 182 T312 192" />
+
+      {/* Dashed Migration Loop */}
       <path
-        className="svg-draw-path"
-        d="M28 84 C28 42, 74 26, 104 48 C122 62, 110 108, 66 108 C40 108, 28 96, 28 84 Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeDasharray="5 4"
-        opacity="0.82"
+        id="ml-mig-loop"
+        className="a"
+        d="M84 166 C84 102, 194 76, 256 108 C294 128, 272 204, 174 204 C116 204, 84 186, 84 166 Z"
+        strokeDasharray="4 4"
       />
 
-      {/* Key staging points */}
-      <circle cx="28" cy="84" r="4.5" fill="currentColor" />
-      <circle cx="104" cy="48" r="5" fill="#e5a853" />
-      <circle cx="66" cy="108" r="4.5" fill="currentColor" />
-      <text x="104" y="38" textAnchor="middle" className="fill-current font-mono text-[7px]" opacity="0.8">
+      {/* Staging Camps */}
+      <circle className="dot" cx="256" cy="108" r="4.5" data-pop />
+      <circle className="dot-p" cx="174" cy="204" r="4" data-pop />
+      <circle className="dot-p" cx="84" cy="166" r="4" data-pop />
+      <text className="ml-grade" x="266" y="96" data-fade>
         MARA
       </text>
-      <text x="66" y="122" textAnchor="middle" className="fill-current font-mono text-[7px]" opacity="0.8">
+      <text x="174" y="224" textAnchor="middle" data-fade>
         NDUTU
       </text>
 
-      {/* Synchronized SMIL Migration Caravan */}
-      {[0, -1.2, -2.4, -3.6].map((begin, idx) => (
-        <circle key={idx} r={idx === 0 ? 4.5 : 3.2} fill="#e5a853">
-          <animateMotion
-            dur="4.8s"
-            begin={`${begin}s`}
-            repeatCount="indefinite"
-            path="M28 84 C28 42, 74 26, 104 48 C122 62, 110 108, 66 108 C40 108, 28 96, 28 84 Z"
-          />
-        </circle>
-      ))}
+      {/* GPS Signal Arcs */}
+      <path className="a" d="M276 92a14 14 0 0 1 12 12" data-blink />
+      <path className="f" d="M282 84a24 24 0 0 1 18 20" data-blink />
+
+      {/* Synchronized MotionPath Caravan */}
+      <circle
+        className="dot"
+        cx="84"
+        cy="166"
+        r="4.5"
+        data-travel="#ml-mig-loop"
+        data-travel-time="4.8"
+        data-travel-delay="0"
+      />
+      <circle
+        className="dot-p"
+        cx="84"
+        cy="166"
+        r="3.2"
+        data-travel="#ml-mig-loop"
+        data-travel-time="4.8"
+        data-travel-delay="-1.6"
+      />
+      <circle
+        className="dot"
+        cx="84"
+        cy="166"
+        r="3.2"
+        data-travel="#ml-mig-loop"
+        data-travel-time="4.8"
+        data-travel-delay="-3.2"
+      />
     </svg>
   );
 }
 
 /**
- * 4. High-Altitude Pulse Oximeter & SpO2 Telemetry
- * Animated waveform + expanding lung barometer + Barafu Camp altitude check.
+ * 04 / MEDICAL — KPAP SpO2 Oximetry & Lake Louise Log
+ * Modeled directly after Motion Lab's caretrack.html telemetry sketch.
  */
 export function PulseOximeterSvg({ className }: SvgProps) {
   return (
     <svg
-      viewBox="0 0 140 140"
-      fill="none"
-      className={cn("safari-svg text-primary", className)}
+      viewBox="0 0 360 260"
+      className={cn("ml-art", className)}
       aria-hidden="true"
+      focusable="false"
+      data-draw
+      data-draw-step="0.05"
+      data-draw-delay="0.35"
     >
-      {/* Instrument shell */}
-      <rect
-        x="16"
-        y="28"
-        width="108"
-        height="84"
-        rx="16"
-        fill="currentColor"
-        fillOpacity="0.06"
-        stroke="currentColor"
-        strokeWidth="1.8"
+      <rect x="20" y="20" width="320" height="220" rx="14" />
+      <circle cx="62" cy="56" r="15" />
+      <circle cx="62" cy="51" r="4.5" />
+      <path d="M53 65a9 9 0 0 1 18 0" />
+      <path d="M90 50h88" strokeWidth="2" />
+      <path className="f" d="M90 64h52" />
+
+      <rect className="wash" x="236" y="42" width="84" height="26" rx="13" data-fade />
+      <rect className="a" x="236" y="42" width="84" height="26" rx="13" />
+      <text className="ml-grade" x="278" y="59" textAnchor="middle" data-fade>
+        SpO2 94%
+      </text>
+
+      <path className="f" d="M20 88h320" />
+
+      {/* Live EKG / Oximetry Waveform + MotionPath Tracer */}
+      <path
+        id="ml-spo2-wave"
+        className="a"
+        d="M42 132h48l10-24 14 48 14-42 9 18h46l8-14 9 14h118"
+        strokeWidth="1.65"
+      />
+      <circle
+        className="dot"
+        cx="42"
+        cy="132"
+        r="4"
+        data-travel="#ml-spo2-wave"
+        data-travel-time="3.1"
       />
 
-      {/* Subtle grid */}
-      <line x1="25" y1="54" x2="115" y2="54" stroke="currentColor" strokeOpacity="0.12" />
-      <line x1="25" y1="74" x2="115" y2="74" stroke="currentColor" strokeOpacity="0.12" />
-      <line x1="25" y1="94" x2="115" y2="94" stroke="currentColor" strokeOpacity="0.12" />
+      {/* 3 KPAP Morning / Evening Lake Louise Checks */}
+      <path className="a" d="M44 176h10" />
+      <path d="M66 176h156" />
+      <rect className="wash-p" x="294" y="166" width="20" height="20" rx="5" data-fade data-at=">0.12" />
+      <path className="p" d="M299 176l4 4 7-8" strokeWidth="1.6" data-at="<" />
 
-      {/* Live EKG / Oximetry Waveform */}
-      <path
-        d="M25 74 H44 L51 52 L59 96 L68 44 L76 82 L83 74 H115"
-        stroke="#e5a853"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeDasharray="160"
-        strokeDashoffset="160"
-      >
-        <animate
-          attributeName="stroke-dashoffset"
-          values="160;0;0;-160"
-          keyTimes="0;0.45;0.78;1"
-          dur="2.6s"
-          repeatCount="indefinite"
-        />
-      </path>
+      <path className="a" d="M44 198h10" />
+      <path d="M66 198h184" />
+      <rect className="wash-p" x="294" y="188" width="20" height="20" rx="5" data-fade data-at=">0.12" />
+      <path className="p" d="M299 198l4 4 7-8" strokeWidth="1.6" data-at="<" />
 
-      {/* Header telemetry */}
-      <text x="26" y="44" className="fill-current font-mono text-[8px] font-semibold" opacity="0.88">
-        SpO2 94% · 4,673M
+      <path className="a" d="M44 220h10" />
+      <path className="f" d="M66 220h128" />
+      <text x="278" y="224" textAnchor="end" data-fade>
+        4,673M O2 READY
       </text>
-      <text x="26" y="104" className="fill-current font-mono text-[7px]" opacity="0.65">
-        KPAP MEDICAL LOG · AM/PM
-      </text>
-
-      {/* Breathing status indicator */}
-      <circle cx="109" cy="41" r="3.5" fill="#62b388">
-        <animate attributeName="r" values="2.5;4.5;2.5" dur="1.5s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="1;0.35;1" dur="1.5s" repeatCount="indefinite" />
-      </circle>
     </svg>
   );
 }
 
 /**
- * 5. Swarovski Twin-Barrel Safari Binoculars
- * Dual rotating focus bezels, acacia & horizon silhouette inside optics, sweeping glass glint.
+ * 05 / OPTICS — Swarovski Rangefinder Optics & Sighting Checklist
  */
 export function OpticsBinocularsSvg({ className }: SvgProps) {
   return (
     <svg
-      viewBox="0 0 140 140"
-      fill="none"
-      className={cn("safari-svg text-primary", className)}
+      viewBox="0 0 360 260"
+      className={cn("ml-art", className)}
       aria-hidden="true"
+      focusable="false"
+      data-draw
+      data-draw-step="0.05"
+      data-draw-delay="0.45"
     >
-      {/* Bridge & focus wheel */}
-      <rect x="60" y="42" width="20" height="14" rx="4" fill="currentColor" opacity="0.85" />
-      <circle cx="70" cy="49" r="3" fill="#e5a853" />
+      <rect x="20" y="20" width="320" height="220" rx="14" />
+      <path className="f" d="M20 58h320" />
+      <path d="M40 39h86" strokeWidth="2" />
+      <text x="316" y="42" textAnchor="end" data-fade>
+        10×42 SWAROVSKI
+      </text>
 
-      {/* Optical Barrels */}
-      <circle
-        cx="43"
-        cy="78"
-        r="29"
-        fill="currentColor"
-        fillOpacity="0.08"
-        stroke="currentColor"
-        strokeWidth="2.1"
-      />
-      <circle
-        cx="97"
-        cy="78"
-        r="29"
-        fill="currentColor"
-        fillOpacity="0.08"
-        stroke="currentColor"
-        strokeWidth="2.1"
-      />
+      {/* Left: Dual Calibrated Binocular Lenses */}
+      <circle cx="88" cy="148" r="46" strokeWidth="1.5" />
+      <circle className="f" cx="88" cy="148" r="34" />
+      <circle cx="152" cy="148" r="46" strokeWidth="1.5" />
+      <circle className="f" cx="152" cy="148" r="34" />
+      <rect x="111" y="96" width="18" height="10" rx="3" />
 
-      {/* Counter-rotating focus rings */}
-      <g className="svg-optic-ring" style={{ transformOrigin: "43px 78px" }}>
-        <circle
-          cx="43"
-          cy="78"
-          r="21"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeDasharray="6 3.5"
-          opacity="0.72"
-        />
-      </g>
-      <g className="svg-optic-ring-rev" style={{ transformOrigin: "97px 78px" }}>
-        <circle
-          cx="97"
-          cy="78"
-          r="21"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeDasharray="6 3.5"
-          opacity="0.72"
-        />
-      </g>
+      {/* Crosshair ticks & Serengeti acacia horizon */}
+      <path className="f" d="M64 148h48M88 124v48M128 148h48M152 124v48" />
+      <path className="a" d="M58 156 Q88 138 118 156" />
+      <path className="a" d="M122 156 Q152 138 182 156" />
+      <path d="M88 148v-12M78 136h20" />
+      <path d="M152 148v-12M142 136h20" />
+      <circle className="dot" cx="152" cy="142" r="3" data-blink />
 
-      {/* Serengeti horizon & acacia silhouette inside lenses */}
-      <path d="M27 84 Q43 72 59 84" stroke="#e5a853" strokeWidth="2" strokeLinecap="round" />
-      <path d="M81 84 Q97 72 113 84" stroke="#e5a853" strokeWidth="2" strokeLinecap="round" />
-      <path d="M43 80 V71 M36 71 H50" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M97 80 V71 M90 71 H104" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      {/* Right: Field Sighting Log */}
+      <path className="f" d="M214 58v182" />
+      <text x="230" y="88" data-fade>
+        FIELD LOG
+      </text>
+      <path d="M230 118h54" />
+      <rect className="wash" x="298" y="106" width="22" height="22" rx="5" data-fade data-at=">0.1" />
+      <path className="a" d="M303 117l4 4 8-9" strokeWidth="1.6" data-at="<" />
 
-      {/* Glass lens glint */}
-      <path d="M33 65 L40 59 M87 65 L94 59" stroke="white" strokeWidth="1.8" strokeLinecap="round">
-        <animate attributeName="opacity" values="0.2;0.95;0.2" dur="2.8s" repeatCount="indefinite" />
-      </path>
+      <path d="M230 156h44" />
+      <rect className="wash" x="298" y="144" width="22" height="22" rx="5" data-fade data-at=">0.1" />
+      <path className="a" d="M303 155l4 4 8-9" strokeWidth="1.6" data-at="<" />
+
+      <path d="M230 194h58" />
+      <rect className="wash" x="298" y="182" width="22" height="22" rx="5" data-fade data-at=">0.1" />
+      <path className="a" d="M303 193l4 4 8-9" strokeWidth="1.6" data-at="<" />
     </svg>
   );
 }
 
 /**
- * 6. Zanzibar Ngalawa Dhow & Coral Reef Ripples
- * Tilting traditional dhow sail beneath golden coastal sun and opposing wave swells.
+ * 06 / COAST — Seronera-to-Zanzibar Flight & Coral Reef Dhow Chart
  */
 export function ZanzibarDhowSvg({ className }: SvgProps) {
   return (
     <svg
-      viewBox="0 0 140 140"
-      fill="none"
-      className={cn("safari-svg text-primary", className)}
+      viewBox="0 0 360 260"
+      className={cn("ml-art", className)}
       aria-hidden="true"
+      focusable="false"
+      data-draw
+      data-draw-step="0.05"
+      data-draw-delay="0.55"
     >
-      {/* Equatorial Sun Glow */}
-      <circle cx="100" cy="36" r="14" fill="#e5a853" opacity="0.25">
-        <animate attributeName="r" values="12;17;12" dur="3.6s" repeatCount="indefinite" />
-      </circle>
-      <circle cx="100" cy="36" r="10" fill="#e5a853" opacity="0.9" />
+      <rect x="20" y="20" width="320" height="220" rx="14" />
+      <path className="f" d="M20 58h320" />
+      <path d="M40 39h80" strokeWidth="2" />
+      <rect className="wash" x="252" y="29" width="68" height="20" rx="10" data-fade />
+      <text className="ml-grade" x="286" y="42" textAnchor="middle" data-fade>
+        29°C ZNZ
+      </text>
 
-      {/* Gently rocking wooden dhow */}
-      <g className="svg-rock" style={{ transformOrigin: "70px 92px" }}>
-        <line x1="66" y1="26" x2="66" y2="90" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-        {/* Billowing Lateen Sail */}
-        <path
-          className="svg-draw-path"
-          d="M66 28 C88 48, 94 64, 90 80 L36 73 C46 54, 56 40, 66 28 Z"
-          fill="currentColor"
-          fillOpacity="0.16"
-          stroke="currentColor"
-          strokeWidth="1.9"
-          strokeLinejoin="round"
-        />
-        {/* Wooden Hull */}
-        <path d="M30 90 H108 L96 104 H42 Z" fill="currentColor" opacity="0.88" />
-      </g>
+      {/* Bush Flight Radar Arc: Seronera -> Mnemba Atoll */}
+      <circle className="dot-p" cx="62" cy="186" r="4.5" data-pop />
+      <text x="62" y="206" textAnchor="middle" data-fade>
+        SERONERA
+      </text>
 
-      {/* Dual undulating ocean waves */}
       <path
-        d="M14 111 Q34 104, 54 111 T94 111 T132 111"
-        stroke="currentColor"
-        strokeWidth="2.1"
-        strokeLinecap="round"
-        opacity="0.78"
-      >
-        <animateTransform
-          attributeName="transform"
-          type="translate"
-          values="-5 0;5 0;-5 0"
-          dur="4.2s"
-          repeatCount="indefinite"
-        />
-      </path>
-      <path
-        d="M18 121 Q38 115, 58 121 T98 121 T128 121"
-        stroke="#e5a853"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        opacity="0.72"
-      >
-        <animateTransform
-          attributeName="transform"
-          type="translate"
-          values="5 0;-5 0;5 0"
-          dur="3.4s"
-          repeatCount="indefinite"
-        />
-      </path>
+        id="ml-znj-flight"
+        className="a"
+        d="M62 186 Q150 74, 266 132"
+        strokeDasharray="4 4"
+      />
+      <circle
+        className="dot"
+        cx="62"
+        cy="186"
+        r="4"
+        data-travel="#ml-znj-flight"
+        data-travel-time="3.6"
+      />
+
+      {/* Zanzibar Ngalawa Dhow Sail on Indian Ocean Contours */}
+      <path d="M236 86v76" strokeWidth="1.5" />
+      <path className="a" d="M236 88 C264 110, 272 130, 268 150 L200 142 C212 120, 224 104, 236 88 Z" />
+      <path className="wash" d="M236 88 C264 110, 272 130, 268 150 L200 142 Z" data-fade />
+      <path d="M192 162h96l-14 16h-68z" strokeWidth="1.5" />
+
+      {/* Coral Reef Swells */}
+      <path d="M150 194q26-10 52 0t52 0t52 0" data-blink />
+      <path className="f" d="M164 210q24-9 48 0t48 0t48 0" data-blink />
+      <text x="276" y="226" textAnchor="middle" data-fade>
+        MNEMBA ATOLL
+      </text>
     </svg>
   );
 }
