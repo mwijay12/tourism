@@ -42,17 +42,32 @@ export async function POST(req: NextRequest) {
       },
     ];
 
-    // Send confirmation dossier to guest via Nodemailer
+    // Send VIP welcome & confirmation dossier to guest via Nodemailer
     const guestMail = await sendExpeditionEmail({
       to: guestEmail,
-      subject: `Your Kibo & Plains Tanzania Dossier — ${totalDays} Days (${month} 2027)`,
-      headline: "Asante sana — Your Dossier Request is Confirmed",
-      greeting: `Jambo ${guestName},`,
+      subject: `Karibu Tanzania — Your Kibo & Plains Dossier (${totalDays} Days · ${month} 2027)`,
+      headline: "Asante sana — Your Expedition Dossier is Live",
+      greeting: `Karibu sana, ${guestName},`,
+      templateType: "welcome",
       bodyParagraphs: [
-        "Thank you for planning your Tanzania expedition with Kibo & Plains. Our Arusha and Moshi specialists are reviewing real-time camp availability, TANAPA permits, and domestic bush-flight routing for your dates.",
-        "Below is a snapshot of your configured expedition dossier. One of our lead guides will respond within 12 hours with a tailored day-by-day route and invoice schedule.",
+        "Thank you for trusting Kibo & Plains with your upcoming journey across Tanzania. Our Arusha and Moshi expedition specialists are reviewing real-time camp availability, TANAPA Kilimanjaro gate slots, and domestic bush-flight routing for your window.",
+        "Below is your tailored dossier summary. One of our lead Chagga & TALA guides will respond within 12 hours with your itemized cost PDF invoice and custom lodge options.",
       ],
       summaryRows,
+      tripSteps: [
+        {
+          step: "Open Your Google-Linked Client Portal",
+          detail:
+            "Sign in with your Google account anytime to track permit milestones, KPAP crew allocation, and cost breakdowns.",
+        },
+        {
+          step: "Instant Arusha Specialist Dispatch",
+          detail:
+            "Need changes faster? Message our Arusha desk directly on WhatsApp (+255 792 867 427).",
+        },
+      ],
+      ctaLabel: "Open Your Client Portal",
+      ctaUrl: "https://kibo-plains-tanzania.vercel.app/portal",
     });
 
     // Optionally notify Arusha concierge team inbox if ADMIN_NOTIFY_EMAIL is configured

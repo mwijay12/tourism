@@ -51,6 +51,11 @@ const ROUTE_META: Record<string, TransitionMeta> = {
     coords: "FIREBASE · CLOUDINARY · SMTP",
     swahili: "Usimamizi wa Safari",
   },
+  "/portal": {
+    title: "Client Portal",
+    coords: "ARUSHA · KPAP · INVOICES",
+    swahili: "Safari Yako Tanzania",
+  },
 };
 
 function resolveMeta(href: string, customLabel?: string): TransitionMeta {

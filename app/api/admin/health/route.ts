@@ -19,11 +19,14 @@ export async function GET() {
   );
 
   const nodemailer = isSmtpConfigured();
+  const passcodeConfigured = Boolean(process.env.ADMIN_ACCESS_PASSWORD);
 
   return NextResponse.json({
     firebase,
     googleAuth,
     cloudinary,
     nodemailer,
+    passcodeConfigured,
+    previewPasscodeHint: passcodeConfigured ? null : "kibo2026",
   });
 }
