@@ -343,10 +343,15 @@ export function TransitionProvider({ children }: { children: React.ReactNode }) 
     [pathname, router]
   );
 
+  const isAppWorkspace =
+    pathname?.startsWith("/admin") || pathname?.startsWith("/portal");
+
   return (
     <TransitionContext.Provider value={{ navigate, isTransitioning }}>
-      {/* Curved Flowing SVG Mountain Skyline + Floating S-Trail Altitude Progress */}
-      <CurvedScrollProgress onScrollTop={handleScrollTop} />
+      {/* Curved Flowing SVG Mountain Skyline + Floating S-Trail Altitude Progress (public pages only) */}
+      {!isAppWorkspace && (
+        <CurvedScrollProgress onScrollTop={handleScrollTop} />
+      )}
 
       <div ref={stageRef} className="flex flex-1 flex-col">
         {children}
