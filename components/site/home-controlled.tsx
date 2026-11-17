@@ -134,7 +134,7 @@ export function ControlledKilimanjaroSection() {
           </div>
         </div>
 
-        <div data-scroll-reveal>
+        <div data-scroll-reveal className="min-w-0 w-full max-w-full overflow-hidden">
           <KilimanjaroRouteChart />
         </div>
       </div>

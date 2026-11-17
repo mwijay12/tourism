@@ -181,7 +181,7 @@ export function SiteNavbar() {
         {siteSettings.announcementEnabled && siteSettings.announcementText && (
           <TransitionLink
             href={siteSettings.announcementHref || "/inquire"}
-            className="pointer-events-auto inline-flex max-w-[1160px] items-center gap-2 rounded-full border border-[#e5a853]/40 bg-[#08100c]/90 px-4 py-1 font-mono text-[10px] sm:text-[11px] text-white shadow-md backdrop-blur-md hover:border-[#e5a853]"
+            className="pointer-events-auto inline-flex max-w-full lg:max-w-[1160px] min-w-0 items-center gap-2 rounded-full border border-[#e5a853]/40 bg-[#08100c]/90 px-4 py-1 font-mono text-[10px] sm:text-[11px] text-white shadow-md backdrop-blur-md hover:border-[#e5a853]"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-[#e5a853] animate-pulse shrink-0" />
             <span className="truncate">{siteSettings.announcementText}</span>

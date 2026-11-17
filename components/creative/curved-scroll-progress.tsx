@@ -207,7 +207,7 @@ export function CurvedScrollProgress({ onScrollTop }: CurvedScrollProgressProps)
 
         <svg
           viewBox="0 0 52 118"
-          className="h-[104px] w-[46px] overflow-visible"
+          className="h-[104px] w-[46px] overflow-hidden"
           fill="none"
         >
           {/* Dashed background curved switchback path */}
@@ -256,7 +256,7 @@ export function CurvedScrollProgress({ onScrollTop }: CurvedScrollProgressProps)
             : "pointer-events-none scale-75 opacity-0"
         }`}
       >
-        <svg viewBox="0 0 48 48" className="absolute inset-0 h-full w-full overflow-visible" fill="none">
+        <svg viewBox="0 0 48 48" className="absolute inset-0 h-full w-full overflow-hidden" fill="none">
           <circle
             cx="24"
             cy="24"
