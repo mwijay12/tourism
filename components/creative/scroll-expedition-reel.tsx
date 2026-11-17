@@ -573,7 +573,7 @@ export function ScrollExpeditionReel() {
           {/* Bottom Narrative + Sweeping Curved SVG Route Progress */}
           <div className="absolute inset-x-0 bottom-0 p-4 sm:p-7">
             <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr] lg:items-end">
-              <div>
+              <div className="min-w-0">
                 <div className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-[#a6dec0]">
                   Chapter {current.index} / 05 · {current.location}
                 </div>
@@ -671,7 +671,7 @@ export function ScrollExpeditionReel() {
         </div>
 
         {/* Bottom Chapter Selector Strip */}
-        <div className="relative z-20 flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="relative z-20 flex w-full max-w-full min-w-0 items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {REEL_CHAPTERS.map((chap, i) => {
             const active = i === activeIdx;
             return (

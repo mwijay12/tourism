@@ -92,7 +92,7 @@ export default function KilimanjaroPage() {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4">
               {KILIMANJARO_ZONES.map((item) => (
                 <div
                   key={item.zone}
@@ -121,7 +121,7 @@ export default function KilimanjaroPage() {
       </section>
 
       {/* KPAP & High-Altitude Safety Charter */}
-      <section id="kpap" className="w-full py-20 md:py-28 bg-background text-foreground">
+      <section id="kpap" className="w-full py-20 md:py-28 bg-background text-foreground overflow-x-clip">
         <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
           <div className="grid gap-6 md:grid-cols-3">
             <div className="rounded-3xl border border-border bg-card p-7">

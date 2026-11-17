@@ -108,8 +108,8 @@ function ParksAtlasContent() {
           )}
         </div>
 
-        {/* Selector Pill Strip (horizontal scroll on mobile) */}
-        <div className="mt-5 flex overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-2 sm:gap-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Selector Pill Strip */}
+        <div className="mt-5 flex flex-wrap gap-2 sm:gap-2.5 w-full max-w-full">
           {filteredParks.map((park) => {
             const active = park.slug === activePark.slug;
             return (
@@ -130,8 +130,8 @@ function ParksAtlasContent() {
         </div>
 
         {/* Featured Active Park Dossier */}
-        <div className="mt-10 grid gap-8 rounded-3xl border border-border bg-card p-6 sm:p-9 lg:grid-cols-[1.1fr_0.9fr] lg:items-start shadow-md">
-          <div className="space-y-4">
+        <div className="mt-10 grid gap-8 rounded-3xl border border-border bg-card p-5 sm:p-9 lg:grid-cols-[1.1fr_0.9fr] lg:items-start shadow-md w-full max-w-full overflow-hidden">
+          <div className="min-w-0 space-y-4">
             <div className="group overflow-hidden rounded-2xl border border-border aspect-[16/10]">
               <WebGLImagePlane
                 src={activeParkImg}
@@ -150,7 +150,7 @@ function ParksAtlasContent() {
             )}
           </div>
 
-          <div className="flex flex-col justify-between h-full">
+          <div className="min-w-0 flex flex-col justify-between h-full">
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="rounded-full bg-primary/12 px-3 py-1 font-mono text-[11px] font-medium text-primary">
