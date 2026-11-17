@@ -456,6 +456,19 @@ export function AdminConsole() {
   const isGoogleAdmin = Boolean(user && isAuthorizedAdminEmail(user.email));
   const unlocked = isGoogleAdmin || passcodeUnlocked;
 
+  const clientPipelineTotal = useMemo(
+    () => clients.reduce((sum, c) => sum + (Number(c.totalUsd) || 0), 0),
+    [clients]
+  );
+  const clientPaidTotal = useMemo(
+    () => clients.reduce((sum, c) => sum + (Number(c.paidUsd) || 0), 0),
+    [clients]
+  );
+  const publishedExpeditionsCount = useMemo(
+    () => expeditions.filter((e) => e.published).length,
+    [expeditions]
+  );
+
   // Sidebar entrance animation + Cursor Glow + ⌘K Command Palette
   useEffect(() => {
     if (!unlocked) return;
@@ -1651,6 +1664,21 @@ export function AdminConsole() {
 
               <button
                 type="button"
+                onClick={handleSeedToFirestore}
+                disabled={syncingDb}
+                title="Sync all Site Controls, Clients & Expeditions to Firestore"
+                className="cursor-pointer hidden md:inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 font-mono text-[10.5px] font-medium hover:bg-secondary disabled:opacity-60"
+              >
+                {syncingDb ? (
+                  <RefreshCw className="h-3 w-3 animate-spin text-primary" />
+                ) : (
+                  <Database className="h-3 w-3 text-primary" />
+                )}
+                Sync DB
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setPaletteOpen(true)}
                 className="cursor-pointer hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 font-mono text-[10.5px] text-muted-foreground hover:text-foreground"
               >
@@ -1746,21 +1774,21 @@ export function AdminConsole() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {[
                   {
-                    label: "Projected Season Volume",
-                    value: "$39,920",
-                    delta: "+24.6%",
+                    label: "Active Season Volume",
+                    value: `$${clientPipelineTotal.toLocaleString()}`,
+                    delta: `$${clientPaidTotal.toLocaleString()} paid`,
                     sub: `${clients.length} active VIP dossiers`,
                   },
                   {
                     label: "Client Portal Access",
                     value: `${clients.filter((c) => c.welcomeSent).length} / ${clients.length}`,
-                    delta: "Google Ready",
-                    sub: "Branded welcome emails sent",
+                    delta: `${publishedExpeditionsCount} live trips`,
+                    sub: `${inquiries.filter((i) => i.status === "new").length} open leads awaiting quote`,
                   },
                   {
                     label: "Site CMS Controls",
                     value: siteSettings.announcementEnabled ? "Promo On" : "Standard",
-                    delta: "Live Sync",
+                    delta: `${siteSettings.seasonalModifierPct >= 0 ? "+" : ""}${siteSettings.seasonalModifierPct}% rate`,
                     sub: `Hero: "${siteSettings.heroTitle}"`,
                   },
                   {
@@ -2056,6 +2084,63 @@ export function AdminConsole() {
                     <RotateCcw className="h-3.5 w-3.5" />
                     Reset Defaults
                   </button>
+                </div>
+
+                {/* One-Click Seasonal Campaign Presets */}
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-background/80 p-3">
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mr-1">
+                    Quick Presets:
+                  </span>
+                  {[
+                    {
+                      label: "Peak Migration",
+                      patch: {
+                        heroTitle: "SERENGETI.",
+                        heroEyebrow: "MARA RIVER CROSSINGS · JUL–OCT",
+                        announcementEnabled: true,
+                        announcementText:
+                          "Peak 2027 Mara River Migration camps now 85% committed · Private 4x4 allocations open",
+                        heroBackdrop: "/images/serengeti-wildebeest-river.jpg",
+                        seasonalModifierPct: 12,
+                      },
+                    },
+                    {
+                      label: "Kilimanjaro Summit",
+                      patch: {
+                        heroTitle: "UHURU PEAK.",
+                        heroEyebrow: "5,895M · KPAP ETHICAL LEMOSHO",
+                        announcementEnabled: true,
+                        announcementText:
+                          "94% Summit Rate · 8-Day Lemosho & 9-Day Northern Circuit departures open",
+                        heroBackdrop: "/images/kilimanjaro-uhuru-dawn.jpg",
+                        seasonalModifierPct: 0,
+                      },
+                    },
+                    {
+                      label: "Zanzibar & Reef",
+                      patch: {
+                        heroTitle: "UNGUJA BLUE.",
+                        heroEyebrow: "INDIAN OCEAN · PRIVATE DHOW ESCAPES",
+                        announcementEnabled: true,
+                        announcementText:
+                          "Complimentary Stone Town & spice estate transfer with 7+ day safari bookings",
+                        heroBackdrop: "/images/zanzibar-dhow-ocean.jpg",
+                        seasonalModifierPct: -5,
+                      },
+                    },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setSiteSettings((s) => ({ ...s, ...preset.patch }));
+                        notify(`Loaded "${preset.label}" preset — click Publish Site Changes to apply.`);
+                      }}
+                      className="cursor-pointer rounded-full border border-border bg-card px-3 py-1 font-mono text-[10.5px] font-medium hover:border-primary hover:text-primary transition"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
