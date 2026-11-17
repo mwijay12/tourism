@@ -353,7 +353,7 @@ export function TransitionProvider({ children }: { children: React.ReactNode }) 
         <CurvedScrollProgress onScrollTop={handleScrollTop} />
       )}
 
-      <div ref={stageRef} className="flex flex-1 flex-col">
+      <div ref={stageRef} className="flex flex-1 flex-col min-w-0 w-full max-w-full overflow-x-clip">
         {children}
       </div>
 

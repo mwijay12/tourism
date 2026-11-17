@@ -102,26 +102,26 @@ export function KilimanjaroRouteChart() {
   }, [route]);
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-start w-full max-w-full">
+    <div className="grid gap-6 sm:gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-start w-full max-w-full min-w-0">
       {/* Left: Anime.js SVG Elevation Profile & Route Switcher */}
-      <div className="min-w-0 w-full max-w-full overflow-hidden rounded-3xl border border-border bg-card p-5 sm:p-8 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-5">
+      <div className="min-w-0 w-full max-w-full overflow-hidden rounded-3xl border border-border bg-card p-4 sm:p-8 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4 sm:pb-5">
           <div className="min-w-0">
-            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
+            <span className="font-mono text-[10.5px] sm:text-[11px] uppercase tracking-[0.16em] sm:tracking-[0.18em] text-primary">
               Anime.js v4 · SVG Route Telemetry
             </span>
-            <h3 className="mt-1 font-serif text-2xl sm:text-3xl font-semibold text-foreground break-words">
+            <h3 className="mt-1 font-serif text-xl sm:text-3xl font-semibold text-foreground break-words">
               {route.name} — {route.days} Days
             </h3>
           </div>
-          <div className="shrink-0 flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1.5 font-mono text-xs text-primary">
-            <ShieldCheck className="h-3.5 w-3.5" />
+          <div className="shrink-0 flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 font-mono text-[11px] sm:text-xs text-primary">
+            <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
             <span>{displaySuccess}% Summit Rate</span>
           </div>
         </div>
 
-        {/* Route Selector Tabs (clean multi-row wrap on mobile — zero horizontal overflow) */}
-        <div className="mt-5 flex flex-wrap gap-2 w-full max-w-full">
+        {/* Route Selector Tabs (2-col compact tiles on phone, inline pills on sm+) */}
+        <div className="mt-4 sm:mt-5 grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full max-w-full min-w-0">
           {routes.map((r) => {
             const active = r.id === route.id;
             return (
@@ -129,24 +129,29 @@ export function KilimanjaroRouteChart() {
                 key={r.id}
                 type="button"
                 onClick={() => setSelectedId(r.id)}
-                className={`cursor-pointer rounded-full px-3 sm:px-3.5 py-1.5 text-[11.5px] sm:text-xs font-medium transition-all ${
+                className={`min-w-0 cursor-pointer rounded-2xl sm:rounded-full px-3 sm:px-3.5 py-2 sm:py-1.5 text-left sm:text-center text-[11px] sm:text-xs font-medium transition-all ${
                   active
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "border border-border bg-background text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {r.name} · {r.days}D · ${r.priceUsd.toLocaleString()}
+                <span className="block sm:inline font-semibold truncate">
+                  {r.name}
+                </span>
+                <span className="block sm:inline font-mono text-[10px] sm:text-xs opacity-80 sm:ml-1.5">
+                  {r.days}D · ${r.priceUsd.toLocaleString()}
+                </span>
               </button>
             );
           })}
         </div>
 
         {/* Interactive Elevation SVG */}
-        <div className="mt-6 w-full max-w-full rounded-2xl border border-border bg-background/80 p-3 sm:p-5 overflow-hidden">
+        <div className="mt-5 sm:mt-6 w-full max-w-full rounded-2xl border border-border bg-background/80 p-2.5 sm:p-5 overflow-hidden">
           <svg
             ref={svgRef}
             viewBox="0 0 600 220"
-            className="w-full h-auto overflow-hidden"
+            className="block w-full max-w-full h-auto overflow-hidden"
             role="img"
             aria-label={`Elevation profile for ${route.name}`}
           >
@@ -260,10 +265,10 @@ export function KilimanjaroRouteChart() {
       </div>
 
       {/* Right: Route Dossier & Action */}
-      <div className="min-w-0 w-full max-w-full overflow-hidden flex flex-col justify-between rounded-3xl border border-border bg-card p-5 sm:p-8 shadow-sm">
-        <div>
+      <div className="min-w-0 w-full max-w-full overflow-hidden flex flex-col justify-between rounded-3xl border border-border bg-card p-4 sm:p-8 shadow-sm">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            <span className="font-mono text-[10.5px] sm:text-[11px] uppercase tracking-[0.14em] sm:tracking-[0.16em] text-muted-foreground">
               {route.nickname}
             </span>
             <div className="flex flex-wrap items-center gap-2">
@@ -276,9 +281,9 @@ export function KilimanjaroRouteChart() {
             </div>
           </div>
 
-          <p className="mt-4 text-base leading-relaxed text-foreground/90">{route.summary}</p>
+          <p className="mt-4 text-sm sm:text-base leading-relaxed text-foreground/90">{route.summary}</p>
 
-          <dl className="mt-6 grid grid-cols-2 gap-4 rounded-2xl border border-border bg-background/70 p-4 text-sm">
+          <dl className="mt-5 sm:mt-6 grid grid-cols-2 gap-3 sm:gap-4 rounded-2xl border border-border bg-background/70 p-3.5 sm:p-4 text-xs sm:text-sm">
             <div className="min-w-0">
               <dt className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Compass className="h-3.5 w-3.5 text-primary shrink-0" /> Approach
@@ -293,29 +298,29 @@ export function KilimanjaroRouteChart() {
             </div>
           </dl>
 
-          <ul className="mt-6 space-y-3">
+          <ul className="mt-5 sm:mt-6 space-y-2.5 sm:space-y-3">
             {route.highlights.map((item) => (
-              <li key={item} className="flex items-start gap-2.5 text-sm text-foreground/85">
+              <li key={item} className="flex items-start gap-2.5 text-xs sm:text-sm text-foreground/85">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span>{item}</span>
+                <span className="min-w-0 break-words">{item}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-border pt-6">
+        <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3 border-t border-border pt-5 sm:pt-6">
           <TransitionLink
             href="/kilimanjaro"
             label={`Kilimanjaro · ${route.name}`}
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 sm:px-6 py-3 text-xs sm:text-sm font-medium text-primary-foreground transition hover:opacity-90 text-center"
           >
-            Explore Full Kilimanjaro Dossier
-            <ArrowUpRight className="h-4 w-4" />
+            <span>Explore Full Kilimanjaro Dossier</span>
+            <ArrowUpRight className="h-4 w-4 shrink-0" />
           </TransitionLink>
           <TransitionLink
             href={`/inquire?route=${route.id}`}
             label="Expedition Inquiry"
-            className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-3 text-sm font-medium text-foreground transition hover:bg-secondary"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 sm:px-5 py-3 text-xs sm:text-sm font-medium text-foreground transition hover:bg-secondary text-center"
           >
             Reserve Dates
           </TransitionLink>
