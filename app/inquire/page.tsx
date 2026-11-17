@@ -194,7 +194,7 @@ function InquireConfigurator() {
           {/* Form Left */}
           <form
             onSubmit={handleSubmitInquiry}
-            className="space-y-8 rounded-3xl border border-border bg-card p-6 sm:p-9 shadow-sm"
+            className="min-w-0 w-full max-w-full space-y-8 rounded-3xl border border-border bg-card p-5 sm:p-9 shadow-sm"
           >
             {/* 1. Journey Focus */}
             <div>
@@ -453,7 +453,7 @@ function InquireConfigurator() {
           </form>
 
           {/* Summary Card Right */}
-          <aside className="rounded-3xl border border-border bg-card p-6 sm:p-8 shadow-sm lg:sticky lg:top-28">
+          <aside className="min-w-0 w-full max-w-full rounded-3xl border border-border bg-card p-5 sm:p-8 shadow-sm lg:sticky lg:top-28">
             <div className="flex items-center justify-between border-b border-border pb-4">
               <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary flex items-center gap-1.5">
                 <Compass className="h-3.5 w-3.5" />

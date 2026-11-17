@@ -101,7 +101,7 @@ export function ControlledKilimanjaroSection() {
     <section className="relative w-full py-16 sm:py-20 md:py-28 bg-background text-foreground overflow-x-clip">
       <div className="mx-auto max-w-[1200px] px-4 sm:px-8">
         <div className="grid gap-8 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center mb-12 sm:mb-14">
-          <div data-scroll-reveal>
+          <div data-scroll-reveal className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1 font-mono text-[10.5px] sm:text-[11px] uppercase tracking-[0.18em] text-primary">
               <Compass className="h-3.5 w-3.5" />
               Kilima Njaro · The Roof of Africa

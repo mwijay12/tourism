@@ -116,8 +116,8 @@ export function ParksShowcase() {
         </div>
 
         {/* Region Filter Tabs + Spacious Park/Wildlife Search */}
-        <div className="mt-8 sm:mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-8 sm:mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+          <div className="flex min-w-0 w-full sm:w-auto flex-wrap gap-2">
             {REGIONS.map((item) => {
               const active = region === item;
               return (

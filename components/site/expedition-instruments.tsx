@@ -239,8 +239,8 @@ export function ExpeditionInstruments() {
         </div>
 
         {/* Mobile Quick Jump Strip (01..06) */}
-        <div className="mt-7 flex sm:hidden items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-7 flex sm:hidden items-center justify-between gap-2 w-full max-w-full min-w-0">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {INSTRUMENTS.map((inst, idx) => {
               const active = inst.code === activeCode;
               return (
@@ -267,7 +267,7 @@ export function ExpeditionInstruments() {
         {/* Realistic Photography Cards Grid */}
         <div
           ref={railRef}
-          className="ml-field-rail mt-4 sm:mt-12 sm:grid sm:gap-5 sm:grid-cols-2 lg:grid-cols-3"
+          className="ml-field-rail w-full max-w-full min-w-0 mt-4 sm:mt-12 sm:grid sm:gap-5 sm:grid-cols-2 lg:grid-cols-3"
         >
           {INSTRUMENTS.map((item) => {
             const isActive = item.code === activeCode;

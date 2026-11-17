@@ -375,7 +375,7 @@ export function WebGLTerrainShader() {
           />
 
           <div className="relative z-10 pointer-events-none grid gap-8 p-6 sm:p-10 md:p-14 lg:grid-cols-[1.2fr_0.9fr] lg:items-end">
-            <div className="pointer-events-auto">
+            <div className="pointer-events-auto min-w-0">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/45 px-3.5 py-1 font-mono text-[11px] uppercase tracking-[0.18em] text-[#a5d7bb] backdrop-blur-md">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#69b38a] animate-pulse" />
                 Live GLSL Topographic Shader · Tween.js Morph
@@ -415,7 +415,7 @@ export function WebGLTerrainShader() {
             </div>
 
             {/* Live Tweened Telemetry Card */}
-            <div className="pointer-events-auto rounded-2xl border border-white/15 bg-black/55 p-6 backdrop-blur-xl">
+            <div className="pointer-events-auto min-w-0 rounded-2xl border border-white/15 bg-black/55 p-6 backdrop-blur-xl">
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#a5d7bb]">
                   {current.swahili}
