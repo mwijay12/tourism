@@ -1,16 +1,37 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { EXPEDITION_ITINERARIES } from "@/lib/tanzania-data";
 import { TransitionLink } from "@/components/creative/transition-provider";
+import {
+  DEFAULT_SITE_SETTINGS,
+  fetchSiteSettingsRemote,
+  readSiteSettingsLocal,
+  resolveSiteMedia,
+  type SiteControlSettings,
+} from "@/lib/firebase/site-settings";
 import { ArrowUpRight, Award, Compass, ShieldCheck, Users } from "lucide-react";
 
 gsap.registerPlugin(ScrollTrigger);
 
 export function ExpeditionsShowcase() {
   const sectionRef = useRef<HTMLElement | null>(null);
+  const [siteSettings, setSiteSettings] =
+    useState<SiteControlSettings>(DEFAULT_SITE_SETTINGS);
+
+  useEffect(() => {
+    setSiteSettings(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(setSiteSettings).catch(() => undefined);
+    const onUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<SiteControlSettings>).detail;
+      if (detail) setSiteSettings(detail);
+    };
+    window.addEventListener("kp-site-settings-updated", onUpdate);
+    return () =>
+      window.removeEventListener("kp-site-settings-updated", onUpdate);
+  }, []);
 
   useEffect(() => {
     const el = sectionRef.current;
@@ -96,7 +117,7 @@ export function ExpeditionsShowcase() {
               Curated Journeys · 2026 / 2027 Departures
             </span>
             <h2 className="mt-3 font-serif text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.03]">
-              Signature Tanzania expeditions.
+              {siteSettings.expeditionsTitle}
             </h2>
           </div>
           <p className="max-w-md text-sm sm:text-base text-muted-foreground leading-relaxed">
@@ -114,7 +135,11 @@ export function ExpeditionsShowcase() {
               <div>
                 <div className="relative aspect-[16/10] sm:aspect-[16/9] overflow-hidden">
                   <img
-                    src={trip.image}
+                    src={resolveSiteMedia(
+                      siteSettings,
+                      `exp-${trip.id}`,
+                      trip.image
+                    )}
                     alt={trip.title}
                     className="exp-parallax-img h-full w-full object-cover will-change-transform"
                     loading="lazy"

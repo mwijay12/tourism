@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
 
 const ALLOWED_FOLDERS = new Set([
+  "kibo-plains/brand",
   "kibo-plains/expeditions",
   "kibo-plains/parks",
   "kibo-plains/kilimanjaro",

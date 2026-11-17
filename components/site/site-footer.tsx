@@ -1,40 +1,67 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import RidgelineDitherFooter from "@/components/ui/ridgeline-dither-footer";
+import RidgelineDitherFooter, {
+  type RidgelinePreset,
+} from "@/components/ui/ridgeline-dither-footer";
 import {
   DEFAULT_SITE_SETTINGS,
   fetchSiteSettingsRemote,
   readSiteSettingsLocal,
+  type SiteControlSettings,
+  type SiteThemeId,
 } from "@/lib/firebase/site-settings";
 
+const THEME_TO_FOOTER_PRESET: Record<SiteThemeId, RidgelinePreset> = {
+  savanna: "auto",
+  obsidian: "night",
+  serengeti: "sepia",
+  zanzibar: "glacier",
+};
+
 export function SiteFooter() {
-  const [waNumber, setWaNumber] = useState(DEFAULT_SITE_SETTINGS.whatsappNumber);
+  const [settings, setSettings] =
+    useState<SiteControlSettings>(DEFAULT_SITE_SETTINGS);
 
   useEffect(() => {
-    const sync = () => setWaNumber(readSiteSettingsLocal().whatsappNumber);
-    sync();
-    window.addEventListener("kp-site-settings-updated", sync);
-    fetchSiteSettingsRemote()
-      .then((s) => setWaNumber(s.whatsappNumber))
-      .catch(() => undefined);
-    return () => window.removeEventListener("kp-site-settings-updated", sync);
+    setSettings(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(setSettings).catch(() => undefined);
+
+    const onUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<SiteControlSettings>).detail;
+      if (detail) setSettings(detail);
+      else setSettings(readSiteSettingsLocal());
+    };
+    window.addEventListener("kp-site-settings-updated", onUpdate);
+    return () =>
+      window.removeEventListener("kp-site-settings-updated", onUpdate);
   }, []);
 
-  const waHref = `https://wa.me/${waNumber.replace(/[^0-9]/g, "") || "255792867427"}`;
+  const waHref = `https://wa.me/${
+    settings.whatsappNumber.replace(/[^0-9]/g, "") || "255792867427"
+  }`;
 
   return (
     <RidgelineDitherFooter
-      preset="auto"
+      preset={THEME_TO_FOOTER_PRESET[settings.siteTheme] || "auto"}
       seed={19}
       ridges={6}
       pixel={3}
       mist={0.78}
       drift={1}
       altimeter={true}
-      name="Kibo & Plains"
+      name={settings.brandName || "Kibo & Plains"}
+      logo={
+        settings.brandLogoUrl ? (
+          <img
+            src={settings.brandLogoUrl}
+            alt={settings.brandName}
+            className="h-7 w-7 rounded-md object-contain"
+          />
+        ) : undefined
+      }
       brandHref="/"
-      tagline="Bespoke Mount Kilimanjaro expeditions, private Northern & Southern Circuit safaris, and Zanzibar island escapes crafted in Arusha, Tanzania · Digital system engineered by Altraware Technology."
+      tagline={settings.brandTagline}
       columns={[
         {
           title: "Expeditions",
@@ -68,12 +95,14 @@ export function SiteFooter() {
         },
       ]}
       socials={[
-        { icon: "instagram", href: "https://instagram.com", label: "Kibo & Plains on Instagram" },
-        { icon: "youtube", href: "https://youtube.com", label: "Kibo & Plains Expedition Films" },
-        { icon: "linkedin", href: "https://linkedin.com", label: "Kibo & Plains on LinkedIn" },
-        { icon: "github", href: "https://github.com/mwijay12/tourism", label: "Project Source on GitHub" },
+        { icon: "instagram", href: "https://instagram.com", label: "Instagram" },
+        { icon: "youtube", href: "https://youtube.com", label: "Expedition Films" },
+        { icon: "linkedin", href: "https://linkedin.com", label: "LinkedIn" },
+        { icon: "github", href: "https://github.com/mwijay12/tourism", label: "GitHub" },
       ]}
-      copyright={`© ${new Date().getFullYear()} Kibo & Plains Expeditions Ltd · Arusha & Moshi, Tanzania.`}
+      copyright={`© ${new Date().getFullYear()} ${
+        settings.brandName || "Kibo & Plains"
+      } Expeditions Ltd · Arusha & Moshi, Tanzania.`}
       credit={{ label: "Altraware Technology", href: "https://altraware-tech.vercel.app/" }}
     />
   );

@@ -1,11 +1,18 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { NATIONAL_PARKS, type NationalPark } from "@/lib/tanzania-data";
+import {
+  DEFAULT_SITE_SETTINGS,
+  fetchSiteSettingsRemote,
+  readSiteSettingsLocal,
+  resolveSiteMedia,
+  type SiteControlSettings,
+} from "@/lib/firebase/site-settings";
 import { WebGLImagePlane } from "@/components/creative/webgl-image-plane";
 import { TransitionLink } from "@/components/creative/transition-provider";
-import { ArrowUpRight, Binoculars, Calendar, Compass, MapPin, Mountain } from "lucide-react";
+import { ArrowUpRight, Binoculars, Calendar, Compass, MapPin, Mountain, Search, X } from "lucide-react";
 
 function ParksAtlasContent() {
   const searchParams = useSearchParams();
@@ -15,6 +22,21 @@ function ParksAtlasContent() {
       ? initialSlug
       : NATIONAL_PARKS[0].slug
   );
+  const [parkQuery, setParkQuery] = useState("");
+  const [siteSettings, setSiteSettings] =
+    useState<SiteControlSettings>(DEFAULT_SITE_SETTINGS);
+
+  useEffect(() => {
+    setSiteSettings(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(setSiteSettings).catch(() => undefined);
+    const onUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<SiteControlSettings>).detail;
+      if (detail) setSiteSettings(detail);
+    };
+    window.addEventListener("kp-site-settings-updated", onUpdate);
+    return () =>
+      window.removeEventListener("kp-site-settings-updated", onUpdate);
+  }, []);
 
   useEffect(() => {
     if (initialSlug && NATIONAL_PARKS.some((p) => p.slug === initialSlug)) {
@@ -22,8 +44,26 @@ function ParksAtlasContent() {
     }
   }, [initialSlug]);
 
+  const filteredParks = useMemo(() => {
+    const q = parkQuery.trim().toLowerCase();
+    if (!q) return NATIONAL_PARKS;
+    return NATIONAL_PARKS.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.region.toLowerCase().includes(q) ||
+        p.tagline.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        p.wildlife.some((w) => w.toLowerCase().includes(q))
+    );
+  }, [parkQuery]);
+
   const activePark: NationalPark =
     NATIONAL_PARKS.find((p) => p.slug === selectedSlug) ?? NATIONAL_PARKS[0];
+  const activeParkImg = resolveSiteMedia(
+    siteSettings,
+    `park-${activePark.slug}`,
+    activePark.image
+  );
 
   return (
     <div className="pt-28 pb-20 bg-background text-foreground">
@@ -41,9 +81,30 @@ function ParksAtlasContent() {
           </p>
         </div>
 
+        {/* Full-Width Spacious Park & Wildlife Search Bar */}
+        <div className="mt-8 flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-2.5 shadow-sm focus-within:border-primary">
+          <Search className="h-5 w-5 shrink-0 text-primary" />
+          <input
+            type="search"
+            value={parkQuery}
+            onChange={(e) => setParkQuery(e.target.value)}
+            placeholder="Search national parks, wildlife (e.g. lions, whale sharks, crater), or region..."
+            className="h-10 w-full bg-transparent text-sm sm:text-base text-foreground placeholder:text-muted-foreground outline-none"
+          />
+          {parkQuery && (
+            <button
+              type="button"
+              onClick={() => setParkQuery("")}
+              className="cursor-pointer inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 font-mono text-[11px]"
+            >
+              <X className="h-3.5 w-3.5" /> Clear
+            </button>
+          )}
+        </div>
+
         {/* Selector Pill Strip (horizontal scroll on mobile) */}
-        <div className="mt-8 sm:mt-10 flex overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-2 sm:gap-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {NATIONAL_PARKS.map((park) => {
+        <div className="mt-5 flex overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-2 sm:gap-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {filteredParks.map((park) => {
             const active = park.slug === activePark.slug;
             return (
               <button
@@ -67,7 +128,7 @@ function ParksAtlasContent() {
           <div className="space-y-4">
             <div className="group overflow-hidden rounded-2xl border border-border aspect-[16/10]">
               <WebGLImagePlane
-                src={activePark.image}
+                src={activeParkImg}
                 alt={activePark.name}
                 className="h-full w-full"
               />
@@ -162,7 +223,7 @@ function ParksAtlasContent() {
         <div className="mt-20">
           <h3 className="font-serif text-3xl font-semibold">All Tanzanian Sanctuaries</h3>
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {NATIONAL_PARKS.map((park) => (
+            {filteredParks.map((park) => (
               <button
                 key={park.slug}
                 type="button"
@@ -178,7 +239,7 @@ function ParksAtlasContent() {
               >
                 <div className="aspect-[16/10] overflow-hidden">
                   <img
-                    src={park.image}
+                    src={resolveSiteMedia(siteSettings, `park-${park.slug}`, park.image)}
                     alt={park.name}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />

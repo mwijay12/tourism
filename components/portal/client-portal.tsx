@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   onAuthStateChanged,
   signInWithPopup,
@@ -23,12 +23,30 @@ import {
   DEFAULT_INVOICE_ITEMS,
   SEED_CLIENTS,
   type AdminClientRecord,
+  type ClientNotification,
 } from "@/lib/firebase/admin-types";
+import {
+  fetchAllNotifications,
+  filterNotificationsForEmail,
+  markAllNotificationsReadByEmail,
+  markNotificationReadByEmail,
+  readNotificationsLocal,
+} from "@/lib/firebase/notifications";
+import {
+  DEFAULT_SITE_SETTINGS,
+  fetchSiteSettingsRemote,
+  readSiteSettingsLocal,
+  type SiteControlSettings,
+} from "@/lib/firebase/site-settings";
 import { formatMoney, generateInvoicePdf } from "@/lib/pdf/generate-invoice-pdf";
 import { TransitionLink } from "@/components/creative/transition-provider";
 import {
   ArrowLeft,
+  Bell,
+  BellRing,
   Calendar,
+  Check,
+  CheckCheck,
   CheckCircle2,
   Compass,
   Download,
@@ -50,6 +68,32 @@ const TRIP_STAGES: AdminClientRecord["tripStatus"][] = [
   "Completed",
 ];
 
+const CATEGORY_BADGE: Record<
+  ClientNotification["category"],
+  { label: string; style: string }
+> = {
+  permits: {
+    label: "Permits",
+    style: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  },
+  invoice: {
+    label: "Invoice",
+    style: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  },
+  crew: {
+    label: "Crew & 4x4",
+    style: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  },
+  urgent: {
+    label: "Urgent",
+    style: "bg-red-500/15 text-red-700 dark:text-red-300",
+  },
+  update: {
+    label: "Update",
+    style: "bg-primary/15 text-primary",
+  },
+};
+
 export function ClientPortal() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +101,12 @@ export function ClientPortal() {
   const [clientRecord, setClientRecord] = useState<AdminClientRecord>(
     SEED_CLIENTS[0]
   );
+  const [siteSettings, setSiteSettings] =
+    useState<SiteControlSettings>(DEFAULT_SITE_SETTINGS);
+  const [allNotifications, setAllNotifications] = useState<
+    ClientNotification[]
+  >([]);
+  const [showNotifPanel, setShowNotifPanel] = useState(true);
   const [notesInput, setNotesInput] = useState(SEED_CLIENTS[0].notes);
   const [savingNotes, setSavingNotes] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -68,10 +118,38 @@ export function ClientPortal() {
   };
 
   useEffect(() => {
+    setSiteSettings(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(setSiteSettings).catch(() => undefined);
+
+    setAllNotifications(readNotificationsLocal());
+    fetchAllNotifications().then(setAllNotifications).catch(() => undefined);
+
+    const onNotifUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<ClientNotification[]>).detail;
+      if (Array.isArray(detail)) setAllNotifications(detail);
+      else setAllNotifications(readNotificationsLocal());
+    };
+    const onSiteUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<SiteControlSettings>).detail;
+      if (detail) setSiteSettings(detail);
+    };
+    const onStorage = () => {
+      setAllNotifications(readNotificationsLocal());
+      setSiteSettings(readSiteSettingsLocal());
+    };
+
+    window.addEventListener("kp-notifications-updated", onNotifUpdate);
+    window.addEventListener("kp-site-settings-updated", onSiteUpdate);
+    window.addEventListener("storage", onStorage);
+
     const fb = getFirebaseServices();
     if (!fb) {
       setLoading(false);
-      return;
+      return () => {
+        window.removeEventListener("kp-notifications-updated", onNotifUpdate);
+        window.removeEventListener("kp-site-settings-updated", onSiteUpdate);
+        window.removeEventListener("storage", onStorage);
+      };
     }
 
     const unsub = onAuthStateChanged(fb.auth, async (currentUser) => {
@@ -106,8 +184,39 @@ export function ClientPortal() {
       setLoading(false);
     });
 
-    return () => unsub();
+    return () => {
+      unsub();
+      window.removeEventListener("kp-notifications-updated", onNotifUpdate);
+      window.removeEventListener("kp-site-settings-updated", onSiteUpdate);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
+
+  const clientEmail = (user?.email || clientRecord.email).toLowerCase();
+
+  const myNotifications = useMemo(
+    () => filterNotificationsForEmail(allNotifications, clientEmail),
+    [allNotifications, clientEmail]
+  );
+
+  const unreadCount = useMemo(
+    () =>
+      myNotifications.filter(
+        (n) => !n.readBy.map((e) => e.toLowerCase()).includes(clientEmail)
+      ).length,
+    [myNotifications, clientEmail]
+  );
+
+  const handleMarkRead = async (id: string) => {
+    const next = await markNotificationReadByEmail(id, clientEmail);
+    setAllNotifications(next);
+  };
+
+  const handleMarkAllRead = async () => {
+    const next = await markAllNotificationsReadByEmail(clientEmail);
+    setAllNotifications(next);
+    notify("All expedition notifications marked as read.");
+  };
 
   const handleGoogleSignIn = async () => {
     const fb = getFirebaseServices();
@@ -154,6 +263,11 @@ export function ClientPortal() {
         clientEmail: clientRecord.email,
         clientOrg: clientRecord.organization,
         clientLogoUrl: clientRecord.logoUrl,
+        companyName: siteSettings.brandName,
+        companyLogoUrl: siteSettings.brandLogoUrl,
+        companyEmail: siteSettings.contactEmail,
+        companyPhone: siteSettings.whatsappNumber,
+        statusLabel: clientRecord.tripStatus,
         tripTitle: clientRecord.tripTitle,
         notes:
           "Kibo & Plains Expeditions Ltd · M-Pesa, Card & SWIFT Wire accepted.",
@@ -177,9 +291,19 @@ export function ClientPortal() {
     return (
       <div className="min-h-screen flex flex-col justify-between bg-background px-5 py-8 text-foreground">
         <header className="mx-auto flex w-full max-w-5xl items-center justify-between">
-          <span className="font-serif text-xl font-semibold">
-            Kibo &amp; Plains <span className="text-primary">· Portal</span>
-          </span>
+          <div className="flex items-center gap-2.5 font-serif text-xl font-semibold">
+            {siteSettings.brandLogoUrl && (
+              <img
+                src={siteSettings.brandLogoUrl}
+                alt={siteSettings.brandName}
+                className="h-7 w-7 rounded-lg object-contain bg-white p-0.5 border border-border"
+              />
+            )}
+            <span>
+              {siteSettings.brandName}{" "}
+              <span className="text-primary">· Portal</span>
+            </span>
+          </div>
           <TransitionLink
             href="/"
             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-1.5 font-mono text-xs hover:bg-secondary"
@@ -198,7 +322,7 @@ export function ClientPortal() {
               Your Tanzania Expedition Hub
             </h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Sign in with the Google account linked to your expedition welcome email to inspect your live permit status, KPAP guide allocation, travel preferences, and PDF invoices.
+              Sign in with the Google account linked to your expedition welcome email to inspect live alerts from Arusha, your permit status, KPAP guide allocation, and PDF invoices.
             </p>
 
             <div className="space-y-3 pt-2">
@@ -230,7 +354,7 @@ export function ClientPortal() {
           </div>
         </div>
         <footer className="mx-auto w-full max-w-5xl text-center font-mono text-[11px] text-muted-foreground">
-          Kibo &amp; Plains Expeditions · Arusha &amp; Moshi · Tanzania
+          {siteSettings.brandName} Expeditions · Arusha &amp; Moshi · Tanzania
         </footer>
       </div>
     );
@@ -244,25 +368,57 @@ export function ClientPortal() {
     (s, i) => s + i.qty * i.unitPriceUsd,
     0
   );
+  const waDigits =
+    siteSettings.whatsappNumber.replace(/[^0-9]/g, "") || "255792867427";
 
   return (
     <div className="min-h-screen bg-background pb-20 text-foreground">
-      {/* Standalone Portal Topbar */}
+      {/* Standalone Portal Topbar with Live Notification Bell */}
       <header className="sticky top-0 z-40 h-16 border-b border-border bg-background/85 backdrop-blur-xl mb-8">
         <div className="mx-auto flex h-full max-w-[1160px] items-center justify-between px-4 sm:px-8">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {siteSettings.brandLogoUrl && (
+              <img
+                src={siteSettings.brandLogoUrl}
+                alt={siteSettings.brandName}
+                className="h-7 w-7 rounded-lg object-contain bg-white p-0.5 border border-border"
+              />
+            )}
             <span className="font-serif text-lg sm:text-xl font-semibold">
-              Kibo &amp; Plains <span className="text-primary">· Client Hub</span>
+              {siteSettings.brandName}{" "}
+              <span className="text-primary">· Client Hub</span>
             </span>
           </div>
-          <TransitionLink
-            href="/"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 font-mono text-xs hover:bg-secondary"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Public Site
-          </TransitionLink>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowNotifPanel((v) => !v)}
+              className="relative cursor-pointer inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-1.5 font-mono text-xs hover:bg-secondary"
+            >
+              {unreadCount > 0 ? (
+                <BellRing className="h-3.5 w-3.5 text-[#e5a853]" />
+              ) : (
+                <Bell className="h-3.5 w-3.5 text-primary" />
+              )}
+              <span className="hidden sm:inline">Notifications</span>
+              {unreadCount > 0 && (
+                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#e5a853] px-1.5 text-[10px] font-bold text-[#08100c]">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            <TransitionLink
+              href="/"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 font-mono text-xs hover:bg-secondary"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Public Site
+            </TransitionLink>
+          </div>
         </div>
       </header>
+
       {toast && (
         <div className="fixed top-20 right-4 z-[150] flex items-center gap-2 rounded-full border border-primary/40 bg-[#08100c] px-4 py-2.5 text-xs font-medium text-white shadow-2xl">
           <CheckCircle2 className="h-4 w-4 text-[#e5a853]" />
@@ -325,6 +481,115 @@ export function ClientPortal() {
             </button>
           </div>
         </div>
+
+        {/* LIVE CLIENT NOTIFICATIONS & CONCIERGE FEED */}
+        {showNotifPanel && (
+          <div className="rounded-3xl border border-border bg-card p-6 space-y-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-9 w-9 place-items-center rounded-2xl bg-primary/15 text-primary">
+                  <BellRing className="h-4 w-4" />
+                </span>
+                <div>
+                  <h2 className="font-serif text-2xl font-semibold">
+                    Expedition Notifications &amp; Dispatch Updates
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Live permit alerts, crew briefings, and invoice updates from Arusha Operations.
+                  </p>
+                </div>
+              </div>
+
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleMarkAllRead}
+                  className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 py-2 font-mono text-[11px] font-medium hover:bg-secondary"
+                >
+                  <CheckCheck className="h-3.5 w-3.5 text-primary" />
+                  Mark All Read ({unreadCount})
+                </button>
+              )}
+            </div>
+
+            {myNotifications.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+                No notifications yet for {clientEmail}.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {myNotifications.map((notif) => {
+                  const isRead = notif.readBy
+                    .map((e) => e.toLowerCase())
+                    .includes(clientEmail);
+                  const badge =
+                    CATEGORY_BADGE[notif.category] || CATEGORY_BADGE.update;
+                  return (
+                    <div
+                      key={notif.id}
+                      className={`rounded-2xl border p-4 transition ${
+                        isRead
+                          ? "border-border bg-background/60 opacity-85"
+                          : "border-primary/45 bg-background shadow-sm"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1 flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {!isRead && (
+                              <span className="h-2 w-2 rounded-full bg-[#e5a853]" />
+                            )}
+                            <span
+                              className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase ${badge.style}`}
+                            >
+                              {badge.label}
+                            </span>
+                            <span className="font-mono text-[10.5px] text-muted-foreground">
+                              {new Date(notif.createdAt).toLocaleDateString()}
+                            </span>
+                            {notif.targetEmail === "*" && (
+                              <span className="font-mono text-[10px] text-muted-foreground">
+                                · Broadcast
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-serif text-xl font-semibold">
+                            {notif.title}
+                          </h3>
+                          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                            {notif.message}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          {notif.actionLabel && (
+                            <button
+                              type="button"
+                              onClick={handleDownloadInvoice}
+                              className="cursor-pointer rounded-full bg-primary px-3.5 py-1.5 text-[11px] font-semibold text-primary-foreground"
+                            >
+                              {notif.actionLabel}
+                            </button>
+                          )}
+                          {!isRead && (
+                            <button
+                              type="button"
+                              onClick={() => handleMarkRead(notif.id)}
+                              className="cursor-pointer inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 font-mono text-[10.5px] hover:bg-secondary"
+                            >
+                              <Check className="h-3 w-3 text-primary" />
+                              Mark Read
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Milestone Progress Strip */}
         <div className="rounded-3xl border border-border bg-card p-6">
@@ -431,8 +696,8 @@ export function ClientPortal() {
               </button>
 
               <a
-                href={`https://wa.me/255792867427?text=${encodeURIComponent(
-                  `Jambo Kibo & Plains! Updating my trip ${clientRecord.invoiceNumber} (${clientRecord.name}).`
+                href={`https://wa.me/${waDigits}?text=${encodeURIComponent(
+                  `Jambo ${siteSettings.brandName}! Updating my trip ${clientRecord.invoiceNumber} (${clientRecord.name}).`
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"

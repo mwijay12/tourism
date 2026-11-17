@@ -7,6 +7,12 @@ import { DrawSVGPlugin } from "gsap/DrawSVGPlugin";
 import { MotionPathPlugin } from "gsap/MotionPathPlugin";
 import { TransitionLink } from "@/components/creative/transition-provider";
 import { ArrowUpRight, Compass, Pause, Play, Sparkles } from "lucide-react";
+import {
+  fetchSiteSettingsRemote,
+  readSiteSettingsLocal,
+  resolveSiteMedia,
+  type SiteControlSettings,
+} from "@/lib/firebase/site-settings";
 
 gsap.registerPlugin(ScrollTrigger, DrawSVGPlugin, MotionPathPlugin);
 
@@ -172,13 +178,24 @@ export function ScrollExpeditionReel() {
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    // Preload high-res scene frames into offscreen HTMLImageElements
-    imagesRef.current = REEL_CHAPTERS.map((chap) => {
-      const img = new window.Image();
-      img.decoding = "async";
-      img.src = chap.image;
-      return img;
-    });
+    // Preload high-res scene frames into offscreen HTMLImageElements (honoring Admin imageOverrides)
+    const loadFrameImages = (settings: SiteControlSettings) => {
+      imagesRef.current = REEL_CHAPTERS.map((chap) => {
+        const img = new window.Image();
+        img.crossOrigin = "anonymous";
+        img.decoding = "async";
+        img.src = resolveSiteMedia(settings, `reel-${chap.index}`, chap.image);
+        return img;
+      });
+    };
+
+    loadFrameImages(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(loadFrameImages).catch(() => undefined);
+    const onSettingsUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<SiteControlSettings>).detail;
+      loadFrameImages(detail || readSiteSettingsLocal());
+    };
+    window.addEventListener("kp-site-settings-updated", onSettingsUpdate);
 
     // Build curved SVG flight + altitude gauge timeline
     const curveTl = gsap.timeline({ paused: true });
@@ -420,6 +437,7 @@ export function ScrollExpeditionReel() {
 
     return () => {
       observer.disconnect();
+      window.removeEventListener("kp-site-settings-updated", onSettingsUpdate);
       if (rafId) cancelAnimationFrame(rafId);
       window.removeEventListener("resize", resizeCanvas);
       mm.revert();
