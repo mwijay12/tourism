@@ -50,6 +50,11 @@ export interface InvoiceDraft {
   clientEmail: string;
   clientOrg: string;
   clientLogoUrl: string;
+  companyName?: string;
+  companyLogoUrl?: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  statusLabel?: string;
   tripTitle: string;
   notes: string;
   items: InvoiceLineItem[];
@@ -85,6 +90,27 @@ export interface AdminMediaAsset {
   format?: string;
   source: "cloudinary" | "local";
   createdAt: string;
+}
+
+export interface ClientNotification {
+  id: string;
+  targetEmail: string; // specific email or "*" for all clients
+  targetName: string;
+  title: string;
+  message: string;
+  category: "permits" | "invoice" | "crew" | "urgent" | "update";
+  readBy: string[];
+  createdAt: string;
+  actionLabel?: string;
+  actionHref?: string;
+}
+
+export interface SiteMediaSlot {
+  slotKey: string;
+  label: string;
+  section: string;
+  defaultUrl: string;
+  hint: string;
 }
 
 export interface IntegrationHealth {
@@ -308,4 +334,156 @@ export const SEED_LOCAL_MEDIA: AdminMediaAsset[] = [
     source: "local",
     createdAt: "2026-11-15",
   },
+];
+
+export const SEED_NOTIFICATIONS: ClientNotification[] = [
+  {
+    id: "notif-seed-1",
+    targetEmail: "amina.msuya@example.com",
+    targetName: "Amina Msuya",
+    title: "TANAPA Kilimanjaro & Serengeti Permits Approved",
+    message:
+      "Your 8-day Lemosho Gate summit permits and Northern Serengeti mobile camp reservations are officially cleared under KPAP Lead Guide Juma Kessy.",
+    category: "permits",
+    readBy: [],
+    createdAt: "2026-11-16T08:30:00Z",
+    actionLabel: "Download Updated PDF Invoice",
+  },
+  {
+    id: "notif-seed-2",
+    targetEmail: "*",
+    targetName: "All Active Expedition Guests",
+    title: "Pre-Departure Kit & Pulse Oximetry Briefing Live",
+    message:
+      "Please share your Kilimanjaro Airport (JRO) flight arrival time and cold-weather sleeping bag size inside Pre-Departure Notes so our Moshi warehouse can pack your crate.",
+    category: "crew",
+    readBy: [],
+    createdAt: "2026-11-15T14:15:00Z",
+  },
+  {
+    id: "notif-seed-3",
+    targetEmail: "amina.msuya@example.com",
+    targetName: "Amina Msuya",
+    title: "Invoice KP-INV-2027-014 Published",
+    message:
+      "Your itemized cost breakdown including TANAPA conservation fees, KPAP crew allocation, and Coastal Aviation flights is ready to download as a branded PDF.",
+    category: "invoice",
+    readBy: ["amina.msuya@example.com"],
+    createdAt: "2026-11-14T11:00:00Z",
+  },
+];
+
+export const SITE_MEDIA_SLOTS: SiteMediaSlot[] = [
+  {
+    slotKey: "hero-backdrop",
+    label: "Homepage Hero Backdrop",
+    section: "Hero",
+    defaultUrl: "/images/kilimanjaro-panorama.jpg",
+    hint: "Full-width hero skyline behind TANZANIA headline",
+  },
+  {
+    slotKey: "kili-card-1",
+    label: "Kilimanjaro Summit Dawn",
+    section: "Kilimanjaro Section",
+    defaultUrl: "/images/kilimanjaro-summit-dawn.jpg",
+    hint: "Left showcase card in Roof of Africa section",
+  },
+  {
+    slotKey: "kili-card-2",
+    label: "Kilimanjaro Mawenzi Ridge",
+    section: "Kilimanjaro Section",
+    defaultUrl: "/images/kilimanjaro-mawenzi-ridge.jpg",
+    hint: "Right staggered card in Roof of Africa section",
+  },
+  {
+    slotKey: "reel-01",
+    label: "Reel 01 · Tarangire Baobabs",
+    section: "Aerial Cinema Reel",
+    defaultUrl: "/images/tarangire-baobabs-sunset.jpg",
+    hint: "Chapter 01 of scroll-animated reel",
+  },
+  {
+    slotKey: "reel-02",
+    label: "Reel 02 · Serengeti River",
+    section: "Aerial Cinema Reel",
+    defaultUrl: "/images/serengeti-migration-river.jpg",
+    hint: "Chapter 02 Mara Crossing frame",
+  },
+  {
+    slotKey: "reel-03",
+    label: "Reel 03 · Ngorongoro Crater",
+    section: "Aerial Cinema Reel",
+    defaultUrl: "/images/ngorongoro-crater.jpg",
+    hint: "Chapter 03 caldera basin frame",
+  },
+  {
+    slotKey: "reel-04",
+    label: "Reel 04 · Uhuru Summit",
+    section: "Aerial Cinema Reel",
+    defaultUrl: "/images/kilimanjaro-summit-dawn.jpg",
+    hint: "Chapter 04 summit glacial crest",
+  },
+  {
+    slotKey: "reel-05",
+    label: "Reel 05 · Zanzibar Dhow",
+    section: "Aerial Cinema Reel",
+    defaultUrl: "/images/inst-zanzibar-dhow.jpg",
+    hint: "Chapter 05 coastal reef finale",
+  },
+  {
+    slotKey: "inst-A",
+    label: "Instrument A · Altitude Survey",
+    section: "Field Instruments",
+    defaultUrl: "/images/kilimanjaro-summit-dawn.jpg",
+    hint: "Card 01 / ALTITUDE",
+  },
+  {
+    slotKey: "inst-B",
+    label: "Instrument B · 4x4 Land Cruiser",
+    section: "Field Instruments",
+    defaultUrl: "/images/inst-land-cruiser.jpg",
+    hint: "Card 02 / FLEET",
+  },
+  {
+    slotKey: "inst-C",
+    label: "Instrument C · Great Migration",
+    section: "Field Instruments",
+    defaultUrl: "/images/serengeti-migration-river.jpg",
+    hint: "Card 03 / ECOLOGY",
+  },
+  {
+    slotKey: "inst-D",
+    label: "Instrument D · KPAP Medical",
+    section: "Field Instruments",
+    defaultUrl: "/images/inst-kpap-medical.jpg",
+    hint: "Card 04 / MEDICAL",
+  },
+  {
+    slotKey: "inst-E",
+    label: "Instrument E · Naturalist Optics",
+    section: "Field Instruments",
+    defaultUrl: "/images/inst-naturalist-optics.jpg",
+    hint: "Card 05 / OPTICS",
+  },
+  {
+    slotKey: "inst-F",
+    label: "Instrument F · Zanzibar Reef",
+    section: "Field Instruments",
+    defaultUrl: "/images/inst-zanzibar-dhow.jpg",
+    hint: "Card 06 / COAST",
+  },
+  ...NATIONAL_PARKS.map((p) => ({
+    slotKey: `park-${p.slug}`,
+    label: p.name,
+    section: "National Parks Atlas",
+    defaultUrl: p.image,
+    hint: `${p.region} cover photograph`,
+  })),
+  ...EXPEDITION_ITINERARIES.map((e) => ({
+    slotKey: `exp-${e.id}`,
+    label: e.title,
+    section: "Signature Expeditions",
+    defaultUrl: e.image,
+    hint: `${e.days}-Day itinerary cover`,
+  })),
 ];

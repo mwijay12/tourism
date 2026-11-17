@@ -15,6 +15,13 @@ import {
 } from "@/components/creative/motion-lab-stickers";
 import { WebGLImagePlane } from "@/components/creative/webgl-image-plane";
 import { TransitionLink } from "@/components/creative/transition-provider";
+import {
+  DEFAULT_SITE_SETTINGS,
+  fetchSiteSettingsRemote,
+  readSiteSettingsLocal,
+  resolveSiteMedia,
+  type SiteControlSettings,
+} from "@/lib/firebase/site-settings";
 import { ArrowUpRight, Compass, Radio } from "lucide-react";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -139,6 +146,20 @@ export function ExpeditionInstruments() {
   const sectionRef = useRef<HTMLElement | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
   const [activeCode, setActiveCode] = useState<string>(INSTRUMENTS[0].code);
+  const [siteSettings, setSiteSettings] =
+    useState<SiteControlSettings>(DEFAULT_SITE_SETTINGS);
+
+  useEffect(() => {
+    setSiteSettings(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(setSiteSettings).catch(() => undefined);
+    const onUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<SiteControlSettings>).detail;
+      if (detail) setSiteSettings(detail);
+    };
+    window.addEventListener("kp-site-settings-updated", onUpdate);
+    return () =>
+      window.removeEventListener("kp-site-settings-updated", onUpdate);
+  }, []);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -334,7 +355,11 @@ export function ExpeditionInstruments() {
                   <div className="ml-field-parallax relative aspect-[3/2] overflow-hidden rounded-2xl border border-border/80 bg-muted">
                     <div className="ml-field-parallax-inner absolute inset-x-0 -top-[6%] h-[112%] will-change-transform">
                       <WebGLImagePlane
-                        src={item.image}
+                        src={resolveSiteMedia(
+                          siteSettings,
+                          `inst-${item.key}`,
+                          item.image
+                        )}
                         alt={item.alt}
                         className="h-full w-full"
                       />

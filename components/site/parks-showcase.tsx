@@ -6,7 +6,14 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { NATIONAL_PARKS, type NationalPark } from "@/lib/tanzania-data";
 import { WebGLImagePlane } from "@/components/creative/webgl-image-plane";
 import { TransitionLink } from "@/components/creative/transition-provider";
-import { ArrowUpRight, Compass, MapPin, Sparkles } from "lucide-react";
+import {
+  DEFAULT_SITE_SETTINGS,
+  fetchSiteSettingsRemote,
+  readSiteSettingsLocal,
+  resolveSiteMedia,
+  type SiteControlSettings,
+} from "@/lib/firebase/site-settings";
+import { ArrowUpRight, Compass, MapPin, Search, Sparkles } from "lucide-react";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -21,12 +28,34 @@ const REGIONS = [
 
 export function ParksShowcase() {
   const [region, setRegion] = useState<(typeof REGIONS)[number]>("All Ecosystems");
+  const [query, setQuery] = useState("");
+  const [siteSettings, setSiteSettings] =
+    useState<SiteControlSettings>(DEFAULT_SITE_SETTINGS);
   const gridRef = useRef<HTMLDivElement | null>(null);
 
-  const visibleParks: NationalPark[] =
-    region === "All Ecosystems"
-      ? NATIONAL_PARKS
-      : NATIONAL_PARKS.filter((p) => p.region === region);
+  useEffect(() => {
+    setSiteSettings(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(setSiteSettings).catch(() => undefined);
+    const onUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<SiteControlSettings>).detail;
+      if (detail) setSiteSettings(detail);
+    };
+    window.addEventListener("kp-site-settings-updated", onUpdate);
+    return () =>
+      window.removeEventListener("kp-site-settings-updated", onUpdate);
+  }, []);
+
+  const visibleParks: NationalPark[] = NATIONAL_PARKS.filter((p) => {
+    const regionOk = region === "All Ecosystems" || p.region === region;
+    if (!regionOk) return false;
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.tagline.toLowerCase().includes(q) ||
+      p.wildlife.some((w) => w.toLowerCase().includes(q))
+    );
+  });
 
   useEffect(() => {
     const grid = gridRef.current;
@@ -70,7 +99,7 @@ export function ParksShowcase() {
               TANAPA Protected Sanctuaries · WebGL GLSL Hover Planes
             </div>
             <h2 className="mt-4 font-serif text-4xl sm:text-5xl md:text-6xl font-semibold tracking-tight leading-[1.02]">
-              From volcanic craters to coral reefs.
+              {siteSettings.parksTitle}
             </h2>
           </div>
 
@@ -84,25 +113,38 @@ export function ParksShowcase() {
           </TransitionLink>
         </div>
 
-        {/* Region Filter Tabs (horizontal scroll on mobile) */}
-        <div className="mt-8 sm:mt-10 flex overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {REGIONS.map((item) => {
-            const active = region === item;
-            return (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setRegion(item)}
-                className={`shrink-0 cursor-pointer rounded-full px-4 py-2 text-xs font-medium transition-all ${
-                  active
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "border border-border bg-card text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {item}
-              </button>
-            );
-          })}
+        {/* Region Filter Tabs + Spacious Park/Wildlife Search */}
+        <div className="mt-8 sm:mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {REGIONS.map((item) => {
+              const active = region === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setRegion(item)}
+                  className={`shrink-0 cursor-pointer rounded-full px-4 py-2 text-xs font-medium transition-all ${
+                    active
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "border border-border bg-card text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2.5 rounded-full border border-border bg-card px-4 h-11 w-full sm:w-80 focus-within:border-primary">
+            <Search className="h-4 w-4 shrink-0 text-primary" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search park or wildlife..."
+              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </div>
         </div>
 
         {/* Parks Cards Grid */}
@@ -125,7 +167,11 @@ export function ParksShowcase() {
                 }`}
               >
                 <WebGLImagePlane
-                  src={park.image}
+                  src={resolveSiteMedia(
+                    siteSettings,
+                    `park-${park.slug}`,
+                    park.image
+                  )}
                   alt={`${park.name} — ${park.tagline}`}
                   className="h-full w-full"
                 />
