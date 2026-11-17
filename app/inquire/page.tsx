@@ -2,12 +2,16 @@
 
 import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { KILIMANJARO_ROUTES, NATIONAL_PARKS } from "@/lib/tanzania-data";
+import { KILIMANJARO_ROUTES } from "@/lib/tanzania-data";
 import { getFirebaseServices, isFirebaseConfigured } from "@/lib/firebase/client";
 import {
+  applySeasonalPrice,
   DEFAULT_SITE_SETTINGS,
   fetchSiteSettingsRemote,
+  getEffectiveKilimanjaroRoutes,
+  getEffectiveParks,
   readSiteSettingsLocal,
+  type SiteControlSettings,
 } from "@/lib/firebase/site-settings";
 import { addDoc, collection } from "firebase/firestore";
 import { Check, Compass, Loader2, MessageCircle, Mountain, Send, ShieldCheck } from "lucide-react";
@@ -52,22 +56,30 @@ function InquireConfigurator() {
     mailSent: boolean;
     savedCloud: boolean;
   } | null>(null);
-  const [sitePhone, setSitePhone] = useState(
-    DEFAULT_SITE_SETTINGS.whatsappNumber
-  );
-  const [seasonalMod, setSeasonalMod] = useState(0);
+  const [siteSettings, setSiteSettings] =
+    useState<SiteControlSettings>(DEFAULT_SITE_SETTINGS);
 
   useEffect(() => {
-    const local = readSiteSettingsLocal();
-    setSitePhone(local.whatsappNumber);
-    setSeasonalMod(local.seasonalModifierPct);
-    fetchSiteSettingsRemote()
-      .then((s) => {
-        setSitePhone(s.whatsappNumber);
-        setSeasonalMod(s.seasonalModifierPct);
-      })
-      .catch(() => undefined);
+    setSiteSettings(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(setSiteSettings).catch(() => undefined);
+    const onUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<SiteControlSettings>).detail;
+      if (detail) setSiteSettings(detail);
+    };
+    window.addEventListener("kp-site-settings-updated", onUpdate);
+    return () =>
+      window.removeEventListener("kp-site-settings-updated", onUpdate);
   }, []);
+
+  const sitePhone = siteSettings.whatsappNumber;
+  const effectiveRoutes = useMemo(
+    () => getEffectiveKilimanjaroRoutes(siteSettings),
+    [siteSettings]
+  );
+  const effectiveParks = useMemo(
+    () => getEffectiveParks(siteSettings),
+    [siteSettings]
+  );
 
   const togglePark = (slug: string) => {
     setSelectedParks((prev) =>
@@ -76,15 +88,29 @@ function InquireConfigurator() {
   };
 
   const estimate = useMemo(() => {
-    const kiliDays = focus === "safari" ? 0 : KILIMANJARO_ROUTES.find((r) => r.id === kiliRoute)?.days ?? 8;
+    const selectedRouteObj = effectiveRoutes.find((r) => r.id === kiliRoute);
+    const kiliDays = focus === "safari" ? 0 : selectedRouteObj?.days ?? 8;
     const safariDays = focus === "kilimanjaro" ? 0 : Math.max(4, selectedParks.length * 2);
     const totalDays = kiliDays + safariDays;
-    const dailyRate = tier === "Ultra-Luxury Fly-In" ? 960 : 590;
-    const kiliBase = kiliDays * 410;
-    const rawPerPerson = kiliBase + safariDays * dailyRate;
-    const perPerson = Math.round(rawPerPerson * (1 + (seasonalMod || 0) / 100));
+    const dailyRate =
+      tier === "Ultra-Luxury Fly-In"
+        ? siteSettings.pricing.safariLuxuryDailyUsd
+        : siteSettings.pricing.safariTentedDailyUsd;
+    const kiliBase =
+      focus === "safari"
+        ? 0
+        : selectedRouteObj?.priceUsd ??
+          applySeasonalPrice(
+            kiliDays * siteSettings.pricing.kiliDailyUsd,
+            siteSettings.seasonalModifierPct
+          );
+    const safariPart = applySeasonalPrice(
+      safariDays * dailyRate,
+      siteSettings.seasonalModifierPct
+    );
+    const perPerson = kiliBase + safariPart;
     return { totalDays, perPerson };
-  }, [focus, kiliRoute, seasonalMod, selectedParks.length, tier]);
+  }, [effectiveRoutes, focus, kiliRoute, selectedParks.length, siteSettings.pricing, siteSettings.seasonalModifierPct, tier]);
 
   const handleSubmitInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,7 +176,7 @@ function InquireConfigurator() {
   };
 
   return (
-    <div className="pt-28 pb-24 bg-background text-foreground">
+    <div className="pt-28 pb-24 bg-background text-foreground overflow-x-clip">
       <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
         <div className="max-w-3xl">
           <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
@@ -204,7 +230,7 @@ function InquireConfigurator() {
                   02 · Preferred Kilimanjaro Route
                 </label>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {KILIMANJARO_ROUTES.map((r) => (
+                  {effectiveRoutes.map((r) => (
                     <button
                       key={r.id}
                       type="button"
@@ -215,7 +241,7 @@ function InquireConfigurator() {
                           : "border border-border bg-background text-foreground hover:bg-secondary"
                       }`}
                     >
-                      {r.name} ({r.days}D · {r.successRate}%)
+                      {r.name} ({r.days}D · {r.successRate}% · ${r.priceUsd.toLocaleString()})
                     </button>
                   ))}
                 </div>
@@ -229,7 +255,7 @@ function InquireConfigurator() {
                   03 · National Parks &amp; Coastlines
                 </label>
                 <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-                  {NATIONAL_PARKS.filter((p) => p.slug !== "kilimanjaro").map((park) => {
+                  {effectiveParks.filter((p) => p.slug !== "kilimanjaro").map((park) => {
                     const checked = selectedParks.includes(park.slug);
                     return (
                       <button

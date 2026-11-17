@@ -44,13 +44,16 @@ import {
 import {
   DEFAULT_SITE_SETTINGS,
   SITE_THEMES,
+  applySeasonalPrice,
   fetchSiteSettingsRemote,
   readSiteSettingsLocal,
   resolveSiteMedia,
   saveSiteSettingsRemote,
   type SiteControlSettings,
+  type SiteExpeditionItem,
   type SiteThemeId,
 } from "@/lib/firebase/site-settings";
+import { KILIMANJARO_ROUTES, NATIONAL_PARKS } from "@/lib/tanzania-data";
 import {
   fetchAllNotifications,
   pushClientNotification,
@@ -341,7 +344,8 @@ export function AdminConsole() {
   });
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
-  // Expedition creator state
+  // Expedition creator / editor state
+  const [editingExpId, setEditingExpId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newSwahili, setNewSwahili] = useState("");
   const [newDays, setNewDays] = useState(7);
@@ -350,6 +354,10 @@ export function AdminConsole() {
     useState<AdminExpeditionItem["category"]>("Northern Circuit");
   const [newImage, setNewImage] = useState("/images/serengeti-lions.jpg");
   const [newSummary, setNewSummary] = useState("");
+
+  // Kilimanjaro Route & National Park live CMS selectors
+  const [cmsRouteId, setCmsRouteId] = useState(KILIMANJARO_ROUTES[0].id);
+  const [cmsParkSlug, setCmsParkSlug] = useState(NATIONAL_PARKS[0].slug);
 
   // Cloudinary uploader state
   const [uploadFolder, setUploadFolder] = useState("kibo-plains/expeditions");
@@ -1178,15 +1186,39 @@ export function AdminConsole() {
     }
   };
 
+  const syncExpeditionsToSite = async (list: AdminExpeditionItem[]) => {
+    const mapped: SiteExpeditionItem[] = list.map((exp) => ({
+      id: exp.id,
+      title: exp.title,
+      days: exp.durationDays,
+      tier: exp.category,
+      startingFromUsd: exp.priceFromUsd,
+      routeSummary: exp.swahiliTag || exp.category,
+      parks: [exp.category, `${exp.durationDays}-Day Private`],
+      highlight: exp.summary,
+      image: exp.featuredImage,
+      published: exp.published,
+    }));
+    const nextSettings: SiteControlSettings = {
+      ...siteSettings,
+      customExpeditions: mapped,
+      updatedAt: new Date().toISOString().slice(0, 10),
+    };
+    setSiteSettings(nextSettings);
+    await saveSiteSettingsRemote(nextSettings);
+  };
+
   // Expeditions Actions
   const handleAddExpedition = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
     const id =
+      editingExpId ||
       newTitle
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "") || `exp-${Date.now()}`;
+        .replace(/(^-|-$)/g, "") ||
+      `exp-${Date.now()}`;
     const item: AdminExpeditionItem = {
       id,
       title: newTitle.trim(),
@@ -1199,39 +1231,65 @@ export function AdminConsole() {
       summary: newSummary.trim() || "Private 4x4 guided Tanzania expedition",
       updatedAt: new Date().toISOString().slice(0, 10),
     };
-    setExpeditions((prev) => [item, ...prev]);
+    const nextList = editingExpId
+      ? expeditions.map((x) => (x.id === editingExpId ? item : x))
+      : [item, ...expeditions];
+    setExpeditions(nextList);
+    await syncExpeditionsToSite(nextList);
     const fb = getFirebaseServices();
     if (fb && user) {
       await setDoc(doc(fb.db, "expeditions", item.id), item).catch(
         () => undefined
       );
     }
+    notify(
+      editingExpId
+        ? `Updated & published "${item.title}" ($${item.priceFromUsd.toLocaleString()}) to website!`
+        : `Added & published "${item.title}" to website!`
+    );
+    setEditingExpId(null);
     setNewTitle("");
     setNewSwahili("");
     setNewSummary("");
-    notify(`Added "${item.title}"`);
+  };
+
+  const handleLoadExpeditionForEdit = (item: AdminExpeditionItem) => {
+    setEditingExpId(item.id);
+    setNewTitle(item.title);
+    setNewSwahili(item.swahiliTag);
+    setNewDays(item.durationDays);
+    setNewPrice(item.priceFromUsd);
+    setNewCategory(item.category);
+    setNewImage(item.featuredImage);
+    setNewSummary(item.summary);
+    notify(`Editing "${item.title}" — modify fields on the left and click Save Package.`);
   };
 
   const handleTogglePublished = async (item: AdminExpeditionItem) => {
     const next = !item.published;
-    setExpeditions((prev) =>
-      prev.map((x) => (x.id === item.id ? { ...x, published: next } : x))
+    const nextList = expeditions.map((x) =>
+      x.id === item.id ? { ...x, published: next } : x
     );
+    setExpeditions(nextList);
+    await syncExpeditionsToSite(nextList);
     const fb = getFirebaseServices();
     if (fb && user) {
       await updateDoc(doc(fb.db, "expeditions", item.id), {
         published: next,
       }).catch(() => undefined);
     }
+    notify(`${item.title} ${next ? "published live" : "hidden from site"}.`);
   };
 
   const handleDeleteExpedition = async (id: string) => {
-    setExpeditions((prev) => prev.filter((x) => x.id !== id));
+    const nextList = expeditions.filter((x) => x.id !== id);
+    setExpeditions(nextList);
+    await syncExpeditionsToSite(nextList);
     const fb = getFirebaseServices();
     if (fb && user) {
       await deleteDoc(doc(fb.db, "expeditions", id)).catch(() => undefined);
     }
-    notify("Removed package.");
+    notify("Removed package & updated website.");
   };
 
   const handleInquiryStatus = async (
@@ -2765,23 +2823,382 @@ export function AdminConsole() {
                   </div>
                   <div>
                     <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Seasonal Rate Modifier (%)
+                      Footer Office Address Line
                     </label>
                     <input
-                      type="number"
-                      min={-30}
-                      max={40}
-                      value={siteSettings.seasonalModifierPct}
+                      value={siteSettings.footerOfficeLine}
                       onChange={(e) =>
                         setSiteSettings((s) => ({
                           ...s,
-                          seasonalModifierPct: Number(e.target.value),
+                          footerOfficeLine: e.target.value,
                         }))
                       }
-                      className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 font-mono text-xs"
+                      className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-xs"
                     />
                   </div>
                 </div>
+
+                {/* LIVE PRICING ENGINE & RATE MATRIX */}
+                <div className="rounded-2xl border border-primary/25 bg-background p-4 sm:p-5 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-primary font-semibold">
+                        Live Quote &amp; Pricing Engine
+                      </span>
+                      <div className="text-xs text-muted-foreground">
+                        Controls /inquire estimator, route rates, seasonal modifiers &amp; invoice tax defaults
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInvoiceDraft((d) => ({
+                          ...d,
+                          taxPct: siteSettings.pricing.defaultTaxPct,
+                          depositPct: siteSettings.pricing.defaultDepositPct,
+                          tzsRate: siteSettings.pricing.tzsExchangeRate,
+                        }));
+                        notify("Synced Tax %, Deposit % & USD->TZS Rate to Invoice Builder!");
+                      }}
+                      className="cursor-pointer rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 font-mono text-[10.5px] font-semibold text-primary hover:bg-primary/20"
+                    >
+                      Sync to Invoice Studio
+                    </button>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Kilimanjaro Rate ($/day)
+                      </label>
+                      <input
+                        type="number"
+                        min={100}
+                        value={siteSettings.pricing.kiliDailyUsd}
+                        onChange={(e) =>
+                          setSiteSettings((s) => ({
+                            ...s,
+                            pricing: {
+                              ...s.pricing,
+                              kiliDailyUsd: Number(e.target.value) || 0,
+                            },
+                          }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Tented Safari ($/day)
+                      </label>
+                      <input
+                        type="number"
+                        min={150}
+                        value={siteSettings.pricing.safariTentedDailyUsd}
+                        onChange={(e) =>
+                          setSiteSettings((s) => ({
+                            ...s,
+                            pricing: {
+                              ...s.pricing,
+                              safariTentedDailyUsd: Number(e.target.value) || 0,
+                            },
+                          }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Luxury Fly-In ($/day)
+                      </label>
+                      <input
+                        type="number"
+                        min={250}
+                        value={siteSettings.pricing.safariLuxuryDailyUsd}
+                        onChange={(e) =>
+                          setSiteSettings((s) => ({
+                            ...s,
+                            pricing: {
+                              ...s.pricing,
+                              safariLuxuryDailyUsd: Number(e.target.value) || 0,
+                            },
+                          }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <div>
+                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Seasonal Mod (%)
+                      </label>
+                      <input
+                        type="number"
+                        min={-30}
+                        max={45}
+                        value={siteSettings.seasonalModifierPct}
+                        onChange={(e) =>
+                          setSiteSettings((s) => ({
+                            ...s,
+                            seasonalModifierPct: Number(e.target.value),
+                          }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Default Tax (%)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={30}
+                        value={siteSettings.pricing.defaultTaxPct}
+                        onChange={(e) =>
+                          setSiteSettings((s) => ({
+                            ...s,
+                            pricing: {
+                              ...s.pricing,
+                              defaultTaxPct: Number(e.target.value) || 0,
+                            },
+                          }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Deposit Due (%)
+                      </label>
+                      <input
+                        type="number"
+                        min={5}
+                        max={100}
+                        value={siteSettings.pricing.defaultDepositPct}
+                        onChange={(e) =>
+                          setSiteSettings((s) => ({
+                            ...s,
+                            pricing: {
+                              ...s.pricing,
+                              defaultDepositPct: Number(e.target.value) || 0,
+                            },
+                          }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                        1 USD = TZS
+                      </label>
+                      <input
+                        type="number"
+                        min={1500}
+                        value={siteSettings.pricing.tzsExchangeRate}
+                        onChange={(e) =>
+                          setSiteSettings((s) => ({
+                            ...s,
+                            pricing: {
+                              ...s.pricing,
+                              tzsExchangeRate: Number(e.target.value) || 2680,
+                            },
+                          }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-card/80 border border-border px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="font-mono text-muted-foreground">
+                      Live Sample Quote (8D Kili + 6D Tented Safari):
+                    </span>
+                    <span className="font-mono font-bold text-primary">
+                      $
+                      {applySeasonalPrice(
+                        8 * siteSettings.pricing.kiliDailyUsd +
+                          6 * siteSettings.pricing.safariTentedDailyUsd,
+                        siteSettings.seasonalModifierPct
+                      ).toLocaleString()}{" "}
+                      USD pp
+                    </span>
+                  </div>
+                </div>
+
+                {/* KILIMANJARO ROUTES PRICING & DETAILS CMS */}
+                {(() => {
+                  const baseRoute =
+                    KILIMANJARO_ROUTES.find((r) => r.id === cmsRouteId) ??
+                    KILIMANJARO_ROUTES[0];
+                  const ov = siteSettings.kilimanjaroOverrides?.[baseRoute.id] || {};
+                  const patchRoute = (patch: Partial<typeof ov>) =>
+                    setSiteSettings((s) => ({
+                      ...s,
+                      kilimanjaroOverrides: {
+                        ...(s.kilimanjaroOverrides || {}),
+                        [baseRoute.id]: {
+                          ...(s.kilimanjaroOverrides?.[baseRoute.id] || {}),
+                          ...patch,
+                        },
+                      },
+                    }));
+                  return (
+                    <div className="rounded-2xl border border-border bg-background p-4 sm:p-5 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="font-mono text-[10px] uppercase tracking-wider text-primary font-semibold">
+                            Kilimanjaro Routes Pricing &amp; Copy CMS
+                          </span>
+                          <div className="text-xs text-muted-foreground">
+                            Edit route duration, success rate, price &amp; summary live on /, /kilimanjaro &amp; /inquire
+                          </div>
+                        </div>
+                        <select
+                          value={cmsRouteId}
+                          onChange={(e) => setCmsRouteId(e.target.value)}
+                          className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold"
+                        >
+                          {KILIMANJARO_ROUTES.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <label className="font-mono text-[10px] uppercase text-muted-foreground">
+                            Base Price ($ USD)
+                          </label>
+                          <input
+                            type="number"
+                            value={
+                              ov.priceUsd ??
+                              baseRoute.days * siteSettings.pricing.kiliDailyUsd
+                            }
+                            onChange={(e) =>
+                              patchRoute({ priceUsd: Number(e.target.value) || 0 })
+                            }
+                            className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-mono text-[10px] uppercase text-muted-foreground">
+                            Duration (Days)
+                          </label>
+                          <input
+                            type="number"
+                            min={4}
+                            max={14}
+                            value={ov.days ?? baseRoute.days}
+                            onChange={(e) =>
+                              patchRoute({ days: Number(e.target.value) || baseRoute.days })
+                            }
+                            className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-mono text-[10px] uppercase text-muted-foreground">
+                            Success Rate (%)
+                          </label>
+                          <input
+                            type="number"
+                            min={50}
+                            max={100}
+                            value={ov.successRate ?? baseRoute.successRate}
+                            onChange={(e) =>
+                              patchRoute({
+                                successRate: Number(e.target.value) || baseRoute.successRate,
+                              })
+                            }
+                            className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <input
+                        value={ov.nickname ?? baseRoute.nickname}
+                        onChange={(e) => patchRoute({ nickname: e.target.value })}
+                        placeholder="Route tagline"
+                        className="w-full rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium"
+                      />
+                      <textarea
+                        rows={2}
+                        value={ov.summary ?? baseRoute.summary}
+                        onChange={(e) => patchRoute({ summary: e.target.value })}
+                        className="w-full rounded-xl border border-border bg-card px-3 py-2 text-xs"
+                      />
+                    </div>
+                  );
+                })()}
+
+                {/* NATIONAL PARKS ATLAS CONTENT CMS */}
+                {(() => {
+                  const basePark =
+                    NATIONAL_PARKS.find((p) => p.slug === cmsParkSlug) ??
+                    NATIONAL_PARKS[0];
+                  const ov = siteSettings.parkOverrides?.[basePark.slug] || {};
+                  const patchPark = (patch: Partial<typeof ov>) =>
+                    setSiteSettings((s) => ({
+                      ...s,
+                      parkOverrides: {
+                        ...(s.parkOverrides || {}),
+                        [basePark.slug]: {
+                          ...(s.parkOverrides?.[basePark.slug] || {}),
+                          ...patch,
+                        },
+                      },
+                    }));
+                  return (
+                    <div className="rounded-2xl border border-border bg-background p-4 sm:p-5 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="font-mono text-[10px] uppercase tracking-wider text-primary font-semibold">
+                            National Parks Content CMS
+                          </span>
+                          <div className="text-xs text-muted-foreground">
+                            Update Park descriptions, best windows &amp; sizes across / and /parks
+                          </div>
+                        </div>
+                        <select
+                          value={cmsParkSlug}
+                          onChange={(e) => setCmsParkSlug(e.target.value)}
+                          className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold"
+                        >
+                          {NATIONAL_PARKS.map((p) => (
+                            <option key={p.slug} value={p.slug}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <input
+                          value={ov.bestWindow ?? basePark.bestWindow}
+                          onChange={(e) => patchPark({ bestWindow: e.target.value })}
+                          placeholder="Best Window (e.g. Jun – Oct)"
+                          className="rounded-xl border border-border bg-card px-3 py-2 text-xs"
+                        />
+                        <input
+                          value={ov.area ?? basePark.area}
+                          onChange={(e) => patchPark({ area: e.target.value })}
+                          placeholder="Park Area (e.g. 14,763 km²)"
+                          className="rounded-xl border border-border bg-card px-3 py-2 text-xs"
+                        />
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={ov.description ?? basePark.description}
+                        onChange={(e) => patchPark({ description: e.target.value })}
+                        className="w-full rounded-xl border border-border bg-card px-3 py-2 text-xs"
+                      />
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Right Column: Feature Flags + Live Hero & Brand Preview */}
@@ -2802,8 +3219,8 @@ export function AdminConsole() {
                     },
                     {
                       key: "showInstrumentsSection" as const,
-                      title: "Realistic Field Craft & Motion Stickers",
-                      desc: "6 Tanzania photography cards with Motion Lab stickers & parallax",
+                      title: "Field Craft & Expedition Gear",
+                      desc: "6 Tanzania photography cards with telemetry badges & live parallax",
                     },
                   ].map((toggle) => (
                     <label
@@ -3872,10 +4289,26 @@ export function AdminConsole() {
                 onSubmit={handleAddExpedition}
                 className="rounded-3xl border border-border bg-card/95 p-6 space-y-4"
               >
-                <h2 className="font-serif text-2xl font-semibold flex items-center gap-2">
-                  <Plus className="h-5 w-5 text-primary" />
-                  Add Expedition Package
-                </h2>
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="font-serif text-2xl font-semibold flex items-center gap-2">
+                    <Plus className="h-5 w-5 text-primary" />
+                    {editingExpId ? "Edit Expedition Package" : "Add Expedition Package"}
+                  </h2>
+                  {editingExpId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingExpId(null);
+                        setNewTitle("");
+                        setNewSwahili("");
+                        setNewSummary("");
+                      }}
+                      className="cursor-pointer rounded-full border border-border px-3 py-1 font-mono text-[10px]"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
                 <div>
                   <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                     Title
@@ -3892,7 +4325,7 @@ export function AdminConsole() {
                   <input
                     value={newSwahili}
                     onChange={(e) => setNewSwahili(e.target.value)}
-                    placeholder="Swahili Tagline"
+                    placeholder="Swahili Tagline / Route"
                     className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
                   />
                   <select
@@ -3913,18 +4346,30 @@ export function AdminConsole() {
                   </select>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <input
-                    type="number"
-                    value={newDays}
-                    onChange={(e) => setNewDays(Number(e.target.value))}
-                    className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                  />
-                  <input
-                    type="number"
-                    value={newPrice}
-                    onChange={(e) => setNewPrice(Number(e.target.value))}
-                    className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
-                  />
+                  <div>
+                    <label className="font-mono text-[10px] uppercase text-muted-foreground">
+                      Duration (Days)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={newDays}
+                      onChange={(e) => setNewDays(Number(e.target.value))}
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-mono text-[10px] uppercase text-muted-foreground">
+                      Starting Price ($ USD pp)
+                    </label>
+                    <input
+                      type="number"
+                      min={100}
+                      value={newPrice}
+                      onChange={(e) => setNewPrice(Number(e.target.value))}
+                      className="mt-1 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm font-semibold"
+                    />
+                  </div>
                 </div>
                 <input
                   value={newImage}
@@ -3943,29 +4388,45 @@ export function AdminConsole() {
                   type="submit"
                   className="w-full cursor-pointer rounded-full bg-primary py-3 text-sm font-semibold text-primary-foreground"
                 >
-                  Save Package
+                  {editingExpId ? "Update & Publish Live" : "Save & Publish Package"}
                 </button>
               </form>
 
               <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-card/80 px-4 py-3">
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    Changes automatically publish to the public Expeditions Showcase
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await syncExpeditionsToSite(expeditions);
+                      notify("Synced all packages to live website!");
+                    }}
+                    className="cursor-pointer rounded-full border border-primary/35 bg-primary/10 px-3 py-1 font-mono text-[10.5px] font-semibold text-primary"
+                  >
+                    Sync Live Now
+                  </button>
+                </div>
+
                 {expeditions.map((exp) => (
                   <div
                     key={exp.id}
                     data-dash-reveal
                     className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-3xl border border-border bg-card/95 p-4"
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 min-w-0">
                       <img
                         src={exp.featuredImage}
                         alt={exp.title}
                         className="h-16 w-24 shrink-0 rounded-2xl object-cover border border-border"
                       />
-                      <div>
+                      <div className="min-w-0">
                         <span className="font-mono text-[10px] uppercase tracking-wider text-primary">
                           {exp.category} · {exp.durationDays}D · From $
                           {exp.priceFromUsd.toLocaleString()}
                         </span>
-                        <h3 className="font-serif text-xl font-semibold">
+                        <h3 className="font-serif text-xl font-semibold truncate">
                           {exp.title}
                         </h3>
                         <p className="text-xs text-muted-foreground line-clamp-1">
@@ -3973,11 +4434,19 @@ export function AdminConsole() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 self-end sm:self-center">
+                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleLoadExpeditionForEdit(exp)}
+                        className="cursor-pointer rounded-full border border-border bg-background px-3 py-1.5 font-mono text-[10.5px] font-semibold hover:border-primary hover:text-primary"
+                      >
+                        Edit
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleTogglePublished(exp)}
                         className="cursor-pointer rounded-full border border-border bg-background p-2"
+                        title={exp.published ? "Hide from site" : "Publish live"}
                       >
                         {exp.published ? (
                           <Eye className="h-4 w-4 text-primary" />

@@ -98,7 +98,7 @@ export function ControlledKilimanjaroSection() {
   );
 
   return (
-    <section className="relative w-full py-16 sm:py-20 md:py-28 bg-background text-foreground">
+    <section className="relative w-full py-16 sm:py-20 md:py-28 bg-background text-foreground overflow-x-clip">
       <div className="mx-auto max-w-[1200px] px-4 sm:px-8">
         <div className="grid gap-8 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center mb-12 sm:mb-14">
           <div data-scroll-reveal>

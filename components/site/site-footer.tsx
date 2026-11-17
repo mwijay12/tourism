@@ -83,10 +83,9 @@ export function SiteFooter() {
           ],
         },
         {
-          title: "Legal & Studio",
+          title: "Portal & Legal",
           links: [
-            { label: "Admin Console", href: "/admin", badge: "Auth" },
-            { label: "Client Portal", href: "/portal", badge: "Trips" },
+            { label: "Client Trip Portal", href: "/portal", badge: "Trips" },
             { label: "Terms & Conditions", href: "/terms" },
             { label: "Privacy & PDPA 2022", href: "/privacy" },
             { label: "Altraware Technology", href: "https://altraware-tech.vercel.app/" },
@@ -102,7 +101,9 @@ export function SiteFooter() {
       ]}
       copyright={`© ${new Date().getFullYear()} ${
         settings.brandName || "Kibo & Plains"
-      } Expeditions Ltd · Arusha & Moshi, Tanzania.`}
+      } Expeditions Ltd · ${
+        settings.footerOfficeLine || "Arusha & Moshi, Tanzania"
+      }.`}
       credit={{ label: "Altraware Technology", href: "https://altraware-tech.vercel.app/" }}
     />
   );

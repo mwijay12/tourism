@@ -364,7 +364,7 @@ export function WebGLTerrainShader() {
   const current = SHADER_ZONES[activeIndex];
 
   return (
-    <section className="relative w-full bg-[#08100c] text-[#e2eee7] border-y border-white/10">
+    <section className="relative w-full bg-[#08100c] text-[#e2eee7] border-y border-white/10 overflow-x-clip">
       <div className="relative mx-auto max-w-[1200px] px-5 sm:px-8 py-16 md:py-24">
         <div className="relative overflow-hidden rounded-3xl border border-white/15 bg-[#0a1610] shadow-2xl">
           {/* Interactive WebGL GLSL Topographic Shader Canvas */}

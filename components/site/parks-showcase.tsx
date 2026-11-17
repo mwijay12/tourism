@@ -3,12 +3,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { NATIONAL_PARKS, type NationalPark } from "@/lib/tanzania-data";
+import { type NationalPark } from "@/lib/tanzania-data";
 import { WebGLImagePlane } from "@/components/creative/webgl-image-plane";
 import { TransitionLink } from "@/components/creative/transition-provider";
 import {
   DEFAULT_SITE_SETTINGS,
   fetchSiteSettingsRemote,
+  getEffectiveParks,
   readSiteSettingsLocal,
   resolveSiteMedia,
   type SiteControlSettings,
@@ -45,7 +46,8 @@ export function ParksShowcase() {
       window.removeEventListener("kp-site-settings-updated", onUpdate);
   }, []);
 
-  const visibleParks: NationalPark[] = NATIONAL_PARKS.filter((p) => {
+  const effectiveParks = getEffectiveParks(siteSettings);
+  const visibleParks: NationalPark[] = effectiveParks.filter((p) => {
     const regionOk = region === "All Ecosystems" || p.region === region;
     if (!regionOk) return false;
     const q = query.trim().toLowerCase();
@@ -89,7 +91,7 @@ export function ParksShowcase() {
   }, [region]);
 
   return (
-    <section className="relative w-full py-20 md:py-28 bg-background text-foreground">
+    <section className="relative w-full py-20 md:py-28 bg-background text-foreground overflow-x-clip">
       <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
         {/* Header */}
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">

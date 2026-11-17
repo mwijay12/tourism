@@ -6,6 +6,7 @@ import { NATIONAL_PARKS, type NationalPark } from "@/lib/tanzania-data";
 import {
   DEFAULT_SITE_SETTINGS,
   fetchSiteSettingsRemote,
+  getEffectiveParks,
   readSiteSettingsLocal,
   resolveSiteMedia,
   type SiteControlSettings,
@@ -44,10 +45,15 @@ function ParksAtlasContent() {
     }
   }, [initialSlug]);
 
+  const effectiveParks = useMemo(
+    () => getEffectiveParks(siteSettings),
+    [siteSettings]
+  );
+
   const filteredParks = useMemo(() => {
     const q = parkQuery.trim().toLowerCase();
-    if (!q) return NATIONAL_PARKS;
-    return NATIONAL_PARKS.filter(
+    if (!q) return effectiveParks;
+    return effectiveParks.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.region.toLowerCase().includes(q) ||
@@ -55,10 +61,10 @@ function ParksAtlasContent() {
         p.description.toLowerCase().includes(q) ||
         p.wildlife.some((w) => w.toLowerCase().includes(q))
     );
-  }, [parkQuery]);
+  }, [effectiveParks, parkQuery]);
 
   const activePark: NationalPark =
-    NATIONAL_PARKS.find((p) => p.slug === selectedSlug) ?? NATIONAL_PARKS[0];
+    effectiveParks.find((p) => p.slug === selectedSlug) ?? effectiveParks[0];
   const activeParkImg = resolveSiteMedia(
     siteSettings,
     `park-${activePark.slug}`,
@@ -66,7 +72,7 @@ function ParksAtlasContent() {
   );
 
   return (
-    <div className="pt-28 pb-20 bg-background text-foreground">
+    <div className="pt-28 pb-20 bg-background text-foreground overflow-x-clip">
       <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
         {/* Intro */}
         <div className="max-w-3xl">

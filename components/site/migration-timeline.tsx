@@ -109,7 +109,7 @@ export function MigrationTimeline() {
     <section
       id="seasons"
       ref={sectionRef}
-      className="relative w-full py-16 sm:py-20 md:py-28 bg-card/60 border-y border-border"
+      className="relative w-full py-16 sm:py-20 md:py-28 bg-card/60 border-y border-border overflow-x-clip"
     >
       <div className="mx-auto max-w-[1200px] px-4 sm:px-8">
         <div className="max-w-2xl">
@@ -131,7 +131,7 @@ export function MigrationTimeline() {
             aria-hidden="true"
             viewBox="0 0 36 860"
             preserveAspectRatio="none"
-            className="pointer-events-none absolute -left-0.5 sm:left-0 top-2 bottom-2 h-[calc(100%-16px)] w-6 sm:w-8 overflow-visible"
+            className="pointer-events-none absolute left-0 top-2 bottom-2 h-[calc(100%-16px)] w-6 sm:w-8 overflow-hidden"
             fill="none"
           >
             {/* Dashed Serengeti migration guide curve */}

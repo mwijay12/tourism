@@ -17,6 +17,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#145131" },
     { media: "(prefers-color-scheme: dark)", color: "#08100c" },
@@ -30,8 +32,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen flex flex-col bg-background text-foreground antialiased">
+    <html lang="en" suppressHydrationWarning className="overflow-x-clip">
+      <body className="min-h-screen w-full max-w-full overflow-x-clip flex flex-col bg-background text-foreground antialiased">
         <TransitionProvider>
           <AppChrome>{children}</AppChrome>
         </TransitionProvider>
