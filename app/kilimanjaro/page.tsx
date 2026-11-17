@@ -39,7 +39,7 @@ export default function KilimanjaroPage() {
       </ParallaxHero>
 
       {/* Route Telemetry & Comparison */}
-      <section id="routes" className="w-full py-16 sm:py-20 md:py-28 bg-background text-foreground">
+      <section id="routes" className="w-full py-16 sm:py-20 md:py-28 bg-background text-foreground overflow-x-clip">
         <div className="mx-auto max-w-[1200px] px-4 sm:px-8">
           <div data-scroll-reveal className="max-w-2xl mb-10 sm:mb-12">
             <span className="font-mono text-[10.5px] sm:text-[11px] uppercase tracking-[0.2em] text-primary">
@@ -58,7 +58,7 @@ export default function KilimanjaroPage() {
       </section>
 
       {/* Four Ecological Zones */}
-      <section className="w-full py-16 sm:py-20 md:py-24 bg-card/70 border-y border-border">
+      <section className="w-full py-16 sm:py-20 md:py-24 bg-card/70 border-y border-border overflow-x-clip">
         <div className="mx-auto max-w-[1200px] px-4 sm:px-8">
           <div className="grid gap-8 sm:gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div data-scroll-reveal>

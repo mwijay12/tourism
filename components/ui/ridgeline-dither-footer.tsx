@@ -301,13 +301,13 @@ export function rdfElevation(crest: number, rows: number, layer: number, layers:
 
 const RDF_CSS = `
 .rdf-root {
-  position: relative; display: grid; width: 100%; overflow: hidden; isolation: isolate;
+  position: relative; display: grid; width: 100%; max-width: 100%; overflow: hidden; overflow-x: clip; isolation: isolate;
   background: var(--rdf-paper); color: var(--rdf-ink); font-family: var(--rdf-sans);
   -webkit-font-smoothing: antialiased; --rdf-pad: clamp(20px, 3.2vw, 30px);
 }
 .rdf-frame {
   position: relative; display: grid; grid-template-rows: auto auto minmax(var(--rdf-scene-min), 1fr);
-  width: 100%; max-width: var(--rdf-max); margin: 0 auto;
+  width: 100%; max-width: var(--rdf-max); min-width: 0; margin: 0 auto; overflow-x: clip;
 }
 .rdf-frame::before, .rdf-frame::after {
   content: ""; position: absolute; top: 0; bottom: 0; width: 1px; z-index: 3; pointer-events: none;

@@ -3,16 +3,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import {
-  MOTION_LAB_ART_CSS,
-  mountMotionLabDrawings,
-} from "@/components/creative/motion-lab-draw";
-import {
-  SafariSticker,
-  ScribbleUnderline,
-  STICKER_CSS,
-  mountMotionLabStickers,
-} from "@/components/creative/motion-lab-stickers";
 import { WebGLImagePlane } from "@/components/creative/webgl-image-plane";
 import { TransitionLink } from "@/components/creative/transition-provider";
 import {
@@ -30,29 +20,17 @@ const FIELD_MEDIA_CSS = `
 .ml-field-card {
   scroll-snap-align: start;
 }
-.ml-key-dot::before {
-  content: '';
-  display: inline-block;
-  width: 0.42rem;
-  height: 0.42rem;
-  margin-right: 0.55rem;
-  border-radius: 50%;
-  background: var(--accent);
-  vertical-align: 0.08em;
-}
 @media (max-width: 639px) {
   .ml-field-rail {
     display: grid;
     grid-auto-flow: column;
-    grid-auto-columns: 86%;
-    gap: 1rem;
+    grid-auto-columns: 84%;
+    gap: 0.875rem;
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scroll-snap-type: x mandatory;
-    scroll-padding-inline: 1rem;
-    margin-inline: -1rem;
-    padding-inline: 1rem;
     padding-bottom: 0.5rem;
+    max-width: 100%;
     scrollbar-width: none;
   }
   .ml-field-rail::-webkit-scrollbar {
@@ -64,7 +42,7 @@ const FIELD_MEDIA_CSS = `
 const INSTRUMENTS = [
   {
     key: "A",
-    code: "01 / ALTITUDE",
+    code: "01 · ALTITUDE",
     title: "Uhuru Survey & Acclimatization",
     metric: "5,895 m Kibo",
     coords: "3°04′S · 37°21′E",
@@ -77,7 +55,7 @@ const INSTRUMENTS = [
   },
   {
     key: "B",
-    code: "02 / FLEET",
+    code: "02 · FLEET",
     title: "Extended 4x4 Land Cruisers",
     metric: "Pop-Top · Dual Spare",
     coords: "ARUSHA · SERENGETI",
@@ -90,7 +68,7 @@ const INSTRUMENTS = [
   },
   {
     key: "C",
-    code: "03 / ECOLOGY",
+    code: "03 · ECOLOGY",
     title: "Great Migration Intercepts",
     metric: "1.5M+ Wildebeest",
     coords: "2°19′S · MARA RIVER",
@@ -103,7 +81,7 @@ const INSTRUMENTS = [
   },
   {
     key: "D",
-    code: "04 / MEDICAL",
+    code: "04 · MEDICAL",
     title: "SpO2 Oximetry & Gamow Safety",
     metric: "KPAP Verified Crew",
     coords: "BARAFU · 4,673 M",
@@ -116,7 +94,7 @@ const INSTRUMENTS = [
   },
   {
     key: "E",
-    code: "05 / OPTICS",
+    code: "05 · OPTICS",
     title: "Master Naturalist Spotters",
     metric: "Swarovski Optics",
     coords: "10×42 · TALA GUIDED",
@@ -129,7 +107,7 @@ const INSTRUMENTS = [
   },
   {
     key: "F",
-    code: "06 / COAST",
+    code: "06 · COAST",
     title: "Bush-to-Reef Zanzibar Dhows",
     metric: "Mnemba & Nungwi",
     coords: "5°49′S · 39°23′E",
@@ -166,57 +144,49 @@ export function ExpeditionInstruments() {
     if (!section) return;
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const drawHandle = mountMotionLabDrawings(section);
-    const destroyStickers = mountMotionLabStickers(section);
+    if (reduced) return;
 
-    let ctx: gsap.Context | null = null;
-    if (!reduced) {
-      ctx = gsap.context(() => {
-        const cards = gsap.utils.toArray<HTMLElement>(".ml-field-card");
+    const ctx = gsap.context(() => {
+      const cards = gsap.utils.toArray<HTMLElement>(".ml-field-card");
+      gsap.fromTo(
+        cards,
+        { y: 28, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.68,
+          stagger: 0.08,
+          ease: "power3.out",
+          clearProps: "transform",
+          scrollTrigger: {
+            trigger: section,
+            start: "top 82%",
+            once: true,
+          },
+        }
+      );
+
+      gsap.utils.toArray<HTMLElement>(".ml-field-parallax").forEach((frame) => {
+        const inner = frame.querySelector<HTMLElement>(".ml-field-parallax-inner");
+        if (!inner) return;
         gsap.fromTo(
-          cards,
-          { y: 28, opacity: 0 },
+          inner,
+          { yPercent: -4 },
           {
-            y: 0,
-            opacity: 1,
-            duration: 0.68,
-            stagger: 0.08,
-            ease: "power3.out",
-            clearProps: "transform",
+            yPercent: 4,
+            ease: "none",
             scrollTrigger: {
-              trigger: section,
-              start: "top 82%",
-              once: true,
+              trigger: frame,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: true,
             },
           }
         );
+      });
+    }, section);
 
-        gsap.utils.toArray<HTMLElement>(".ml-field-parallax").forEach((frame) => {
-          const inner = frame.querySelector<HTMLElement>(".ml-field-parallax-inner");
-          if (!inner) return;
-          gsap.fromTo(
-            inner,
-            { yPercent: -4 },
-            {
-              yPercent: 4,
-              ease: "none",
-              scrollTrigger: {
-                trigger: frame,
-                start: "top bottom",
-                end: "bottom top",
-                scrub: true,
-              },
-            }
-          );
-        });
-      }, section);
-    }
-
-    return () => {
-      drawHandle.destroy();
-      destroyStickers();
-      ctx?.revert();
-    };
+    return () => ctx.revert();
   }, []);
 
   const currentInstrument =
@@ -235,60 +205,33 @@ export function ExpeditionInstruments() {
       ref={sectionRef}
       className="relative w-full py-16 sm:py-22 md:py-28 bg-background text-foreground border-t border-border overflow-x-clip"
     >
-      <style>{MOTION_LAB_ART_CSS + STICKER_CSS + FIELD_MEDIA_CSS}</style>
-
-      {/* Motion Lab 4-Layer Safari Doodle Stickers (strictly clear of text & captions) */}
-      <SafariSticker
-        name="summit"
-        tone="sun"
-        depth={0.22}
-        turn={10}
-        className="hidden lg:block top-8 right-[4%] [--ml-tilt:9deg] [--ml-size:6.5rem]"
-      />
-      <SafariSticker
-        name="spark"
-        tone="gold"
-        depth={0.14}
-        turn={-12}
-        className="hidden lg:block top-3 right-[12%] [--ml-tilt:0deg] [--ml-size:3.25rem]"
-      />
-      <SafariSticker
-        name="pin"
-        tone="sage"
-        depth={-0.16}
-        turn={-9}
-        className="hidden xl:block bottom-10 left-[2%] [--ml-tilt:-10deg] [--ml-size:5.75rem]"
-      />
+      <style>{FIELD_MEDIA_CSS}</style>
 
       <div className="relative z-10 mx-auto max-w-[1200px] px-4 sm:px-8">
-        {/* Header Row */}
+        {/* Header Row (Clean Typography — Zero Strikethroughs or Stickers) */}
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <span className="font-mono text-[10.5px] sm:text-[11px] uppercase tracking-[0.2em] text-primary">
               Ufundi wa Nyikani · Field Craft &amp; Expedition Gear
             </span>
             <h2 className="mt-3 font-serif text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.06]">
-              Built for mountain cold &amp;{" "}
-              <span className="relative inline-block whitespace-nowrap">
-                savannah dust.
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-0 -bottom-2.5 w-full"
-                >
-                  <ScribbleUnderline />
-                </span>
-              </span>
+              {siteSettings.instrumentsTitle || (
+                <>
+                  Built for mountain cold &amp;{" "}
+                  <span className="text-primary italic">savannah dust.</span>
+                </>
+              )}
             </h2>
           </div>
 
           {/* Live Active Instrument Telemetry Ticker */}
-          <div className="flex items-center gap-3 self-start lg:self-auto rounded-2xl border border-border bg-card px-4 py-2.5 text-xs shadow-sm">
+          <div className="flex items-center gap-3 self-start lg:self-auto max-w-full rounded-2xl border border-border bg-card px-4 py-2.5 text-xs shadow-sm">
             <Radio className="h-4 w-4 text-[#d8914f] shrink-0" />
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            <div className="min-w-0">
+              <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground truncate">
                 Active Instrument · {currentInstrument.code}
               </div>
-              <div className="font-medium text-foreground">
+              <div className="font-medium text-foreground truncate">
                 {currentInstrument.liveTelemetry}
               </div>
             </div>
@@ -311,7 +254,7 @@ export function ExpeditionInstruments() {
                       : "border border-border bg-card text-muted-foreground"
                   }`}
                 >
-                  {inst.key} · 0{idx + 1}
+                  0{idx + 1} · {inst.code.split(" · ")[1]}
                 </button>
               );
             })}
@@ -321,37 +264,26 @@ export function ExpeditionInstruments() {
           </span>
         </div>
 
-        {/* Realistic Photography Cards Grid (horizontal snap on mobile, 2/3-col grid on sm+/lg+) */}
+        {/* Realistic Photography Cards Grid */}
         <div
           ref={railRef}
           className="ml-field-rail mt-4 sm:mt-12 sm:grid sm:gap-5 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {INSTRUMENTS.map((item, idx) => {
+          {INSTRUMENTS.map((item) => {
             const isActive = item.code === activeCode;
             return (
               <figure
                 key={item.code}
                 onMouseEnter={() => setActiveCode(item.code)}
                 onClick={() => setActiveCode(item.code)}
-                className={`ml-field-card group relative flex flex-col justify-between overflow-visible rounded-3xl border p-3.5 sm:p-4 transition-all duration-300 cursor-pointer ${
+                className={`ml-field-card group relative flex flex-col justify-between overflow-hidden rounded-3xl border p-3.5 sm:p-4 transition-all duration-300 cursor-pointer ${
                   isActive
                     ? "border-primary/55 bg-card shadow-lg sm:-translate-y-0.5"
                     : "border-border bg-card/80 hover:border-primary/40 hover:bg-card hover:shadow-md"
                 }`}
               >
-                {/* Signature Motion Lab Sticker perched cleanly on top-right corner of featured 3rd card */}
-                {idx === 2 && (
-                  <SafariSticker
-                    name="compass"
-                    tone="night"
-                    depth={0.18}
-                    turn={-10}
-                    className="hidden lg:block -top-8 -right-6 [--ml-tilt:11deg] [--ml-size:5.25rem]"
-                  />
-                )}
-
                 <div>
-                  {/* Realistic Photographic Frame with Lazy WebGL Hover & GSAP Scrubbed Parallax */}
+                  {/* Realistic Photographic Frame */}
                   <div className="ml-field-parallax relative aspect-[3/2] overflow-hidden rounded-2xl border border-border/80 bg-muted">
                     <div className="ml-field-parallax-inner absolute inset-x-0 -top-[6%] h-[112%] will-change-transform">
                       <WebGLImagePlane
@@ -366,13 +298,11 @@ export function ExpeditionInstruments() {
                     </div>
                     {/* Crisp Top Telemetry Overlay */}
                     <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/65 via-black/25 to-transparent p-3 text-white">
-                      <span className="rounded-full border border-white/25 bg-black/45 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] backdrop-blur-md">
-                        <span className="ml-key-dot font-semibold text-white">
-                          {item.key}
-                        </span>
-                        {item.code.split(" / ")[1]}
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black/50 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] backdrop-blur-md">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#e5a853]" />
+                        {item.code}
                       </span>
-                      <span className="rounded-full bg-[#e5a853] px-2.5 py-0.5 font-mono text-[10px] font-semibold text-[#08100c]">
+                      <span className="rounded-full bg-[#e5a853] px-2.5 py-0.5 font-mono text-[10px] font-semibold text-[#08100c] shrink-0">
                         {item.metric}
                       </span>
                     </div>

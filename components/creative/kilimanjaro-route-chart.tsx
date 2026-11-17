@@ -2,19 +2,46 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { animate, svg, stagger } from "animejs";
-import { KILIMANJARO_ROUTES, type KilimanjaroRoute } from "@/lib/tanzania-data";
+import { KILIMANJARO_ROUTES } from "@/lib/tanzania-data";
+import {
+  DEFAULT_SITE_SETTINGS,
+  fetchSiteSettingsRemote,
+  getEffectiveKilimanjaroRoutes,
+  readSiteSettingsLocal,
+  type SiteControlSettings,
+} from "@/lib/firebase/site-settings";
 import { ArrowUpRight, CheckCircle2, Compass, Mountain, ShieldCheck } from "lucide-react";
 import { TransitionLink } from "@/components/creative/transition-provider";
 
 export function KilimanjaroRouteChart() {
   const [selectedId, setSelectedId] = useState<string>(KILIMANJARO_ROUTES[0].id);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const [displaySuccess, setDisplaySuccess] = useState(KILIMANJARO_ROUTES[0].successRate);
+  const [siteSettings, setSiteSettings] =
+    useState<SiteControlSettings>(DEFAULT_SITE_SETTINGS);
 
-  const route: KilimanjaroRoute = useMemo(
-    () => KILIMANJARO_ROUTES.find((r) => r.id === selectedId) ?? KILIMANJARO_ROUTES[0],
-    [selectedId]
+  useEffect(() => {
+    setSiteSettings(readSiteSettingsLocal());
+    fetchSiteSettingsRemote().then(setSiteSettings).catch(() => undefined);
+    const onUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<SiteControlSettings>).detail;
+      if (detail) setSiteSettings(detail);
+    };
+    window.addEventListener("kp-site-settings-updated", onUpdate);
+    return () =>
+      window.removeEventListener("kp-site-settings-updated", onUpdate);
+  }, []);
+
+  const routes = useMemo(
+    () => getEffectiveKilimanjaroRoutes(siteSettings),
+    [siteSettings]
   );
+
+  const route = useMemo(
+    () => routes.find((r) => r.id === selectedId) ?? routes[0],
+    [routes, selectedId]
+  );
+
+  const [displaySuccess, setDisplaySuccess] = useState(route.successRate);
 
   // Build smooth polyline & filled area paths from route elevation points
   const { linePath, areaPath } = useMemo(() => {
@@ -95,7 +122,7 @@ export function KilimanjaroRouteChart() {
 
         {/* Route Selector Tabs (horizontal scroll on mobile) */}
         <div className="mt-5 flex overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {KILIMANJARO_ROUTES.map((r) => {
+          {routes.map((r) => {
             const active = r.id === route.id;
             return (
               <button
@@ -108,18 +135,18 @@ export function KilimanjaroRouteChart() {
                     : "border border-border bg-background text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {r.name} · {r.days}D
+                {r.name} · {r.days}D · ${r.priceUsd.toLocaleString()}
               </button>
             );
           })}
         </div>
 
         {/* Interactive Elevation SVG */}
-        <div className="mt-6 rounded-2xl border border-border bg-background/80 p-4 sm:p-5">
+        <div className="mt-6 rounded-2xl border border-border bg-background/80 p-4 sm:p-5 overflow-hidden">
           <svg
             ref={svgRef}
             viewBox="0 0 600 220"
-            className="w-full h-auto overflow-visible"
+            className="w-full h-auto overflow-hidden"
             role="img"
             aria-label={`Elevation profile for ${route.name}`}
           >
@@ -235,13 +262,18 @@ export function KilimanjaroRouteChart() {
       {/* Right: Route Dossier & Action */}
       <div className="flex flex-col justify-between rounded-3xl border border-border bg-card p-6 sm:p-8 shadow-sm">
         <div>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
               {route.nickname}
             </span>
-            <span className="rounded-full bg-secondary px-2.5 py-0.5 font-mono text-[10px] font-medium text-foreground">
-              {route.difficulty}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-[#e5a853]/15 border border-[#e5a853]/40 px-2.5 py-0.5 font-mono text-[10.5px] font-semibold text-[#b86f2d] dark:text-[#e5a853]">
+                From ${route.priceUsd.toLocaleString()} pp
+              </span>
+              <span className="rounded-full bg-secondary px-2.5 py-0.5 font-mono text-[10px] font-medium text-foreground">
+                {route.difficulty}
+              </span>
+            </div>
           </div>
 
           <p className="mt-4 text-base leading-relaxed text-foreground/90">{route.summary}</p>

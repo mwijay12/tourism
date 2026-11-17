@@ -471,11 +471,11 @@ export function ScrollExpeditionReel() {
     <section
       ref={sectionRef}
       aria-label="Scroll-animated aerial Tanzania expedition sequence"
-      className="relative w-full bg-[#060c09] text-[#e2eee7] border-y border-white/10"
+      className="relative w-full bg-[#060c09] text-[#e2eee7] border-y border-white/10 overflow-x-clip"
     >
       <div
         ref={pinStageRef}
-        className="relative mx-auto flex min-h-[82vh] md:min-h-screen max-w-[1440px] flex-col justify-between px-4 py-10 sm:px-8 sm:py-12"
+        className="relative mx-auto flex min-h-[82vh] md:min-h-screen w-full max-w-[1440px] flex-col justify-between px-4 py-10 sm:px-8 sm:py-12 min-w-0"
       >
         {/* Top Editorial Telemetry Bar */}
         <div className="relative z-20 flex flex-wrap items-center justify-between gap-4">
@@ -594,7 +594,7 @@ export function ScrollExpeditionReel() {
 
                 <svg
                   viewBox="0 0 680 82"
-                  className="w-full h-14 sm:h-16 overflow-visible"
+                  className="w-full h-14 sm:h-16 overflow-hidden"
                   fill="none"
                 >
                   <defs>

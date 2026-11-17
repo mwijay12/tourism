@@ -141,12 +141,12 @@ export function CurvedScrollProgress({ onScrollTop }: CurvedScrollProgressProps)
       {/* 1. Organic Flowing Curved SVG Skyline Progress Wave (replaces straight top bar) */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-0 z-[120] h-[18px] overflow-visible"
+        className="pointer-events-none fixed inset-x-0 top-0 z-[120] h-[18px] overflow-hidden"
       >
         <svg
           viewBox="0 0 1440 20"
           preserveAspectRatio="none"
-          className="h-full w-full overflow-visible"
+          className="h-full w-full overflow-hidden"
         >
           <defs>
             <linearGradient id="mlCurveGrad" x1="0" y1="0" x2="1440" y2="0" gradientUnits="userSpaceOnUse">

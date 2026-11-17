@@ -1,5 +1,11 @@
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { getFirebaseServices, isFirebaseConfigured } from "@/lib/firebase/client";
+import {
+  KILIMANJARO_ROUTES,
+  NATIONAL_PARKS,
+  type KilimanjaroRoute,
+  type NationalPark,
+} from "@/lib/tanzania-data";
 
 export type SiteThemeId = "savanna" | "obsidian" | "serengeti" | "zanzibar";
 
@@ -27,6 +33,43 @@ export interface SiteThemePreset {
   swatches: [string, string, string];
   light: ThemeTokens;
   dark: ThemeTokens;
+}
+
+export interface SitePricingConfig {
+  kiliDailyUsd: number;
+  safariTentedDailyUsd: number;
+  safariLuxuryDailyUsd: number;
+  defaultTaxPct: number;
+  defaultDepositPct: number;
+  tzsExchangeRate: number;
+}
+
+export interface SiteExpeditionItem {
+  id: string;
+  title: string;
+  days: number;
+  tier: string;
+  startingFromUsd: number;
+  routeSummary: string;
+  parks: string[];
+  highlight: string;
+  image: string;
+  published: boolean;
+}
+
+export interface KilimanjaroRouteOverride {
+  days?: number;
+  successRate?: number;
+  priceUsd?: number;
+  nickname?: string;
+  summary?: string;
+}
+
+export interface ParkContentOverride {
+  tagline?: string;
+  bestWindow?: string;
+  area?: string;
+  description?: string;
 }
 
 export const SITE_THEMES: Record<SiteThemeId, SiteThemePreset> = {
@@ -198,6 +241,8 @@ export interface SiteControlSettings {
   kilimanjaroBody: string;
   parksTitle: string;
   expeditionsTitle: string;
+  instrumentsTitle: string;
+  footerOfficeLine: string;
   announcementEnabled: boolean;
   announcementText: string;
   announcementHref: string;
@@ -206,9 +251,22 @@ export interface SiteControlSettings {
   seasonalModifierPct: number;
   showExpeditionReel: boolean;
   showInstrumentsSection: boolean;
+  pricing: SitePricingConfig;
+  customExpeditions: SiteExpeditionItem[];
+  kilimanjaroOverrides: Record<string, KilimanjaroRouteOverride>;
+  parkOverrides: Record<string, ParkContentOverride>;
   imageOverrides: Record<string, string>;
   updatedAt: string;
 }
+
+export const DEFAULT_PRICING_CONFIG: SitePricingConfig = {
+  kiliDailyUsd: 410,
+  safariTentedDailyUsd: 590,
+  safariLuxuryDailyUsd: 960,
+  defaultTaxPct: 5,
+  defaultDepositPct: 30,
+  tzsExchangeRate: 2680,
+};
 
 export const DEFAULT_SITE_SETTINGS: SiteControlSettings = {
   siteTheme: "savanna",
@@ -227,6 +285,8 @@ export const DEFAULT_SITE_SETTINGS: SiteControlSettings = {
     "Rising 5,895 meters directly above northern Tanzania’s acacia plains, Mount Kilimanjaro is Earth’s highest free-standing peak. Our Chagga-led expeditions prioritize slow acclimatization—pole pole—along the scenic Lemosho and 360° Northern Circuit trails.",
   parksTitle: "From volcanic craters to coral reefs.",
   expeditionsTitle: "Signature Tanzania expeditions.",
+  instrumentsTitle: "",
+  footerOfficeLine: "Sokoine Rd, Clock Tower District · Arusha, Tanzania",
   announcementEnabled: false,
   announcementText:
     "2026–2027 Lemosho & Great Migration Permits Open · Complimentary Arusha Chauffeur Transfer",
@@ -236,6 +296,10 @@ export const DEFAULT_SITE_SETTINGS: SiteControlSettings = {
   seasonalModifierPct: 0,
   showExpeditionReel: true,
   showInstrumentsSection: true,
+  pricing: DEFAULT_PRICING_CONFIG,
+  customExpeditions: [],
+  kilimanjaroOverrides: {},
+  parkOverrides: {},
   imageOverrides: {},
   updatedAt: "2026-11-17",
 };
@@ -253,6 +317,45 @@ export function resolveSiteMedia(
     return settings.heroBackdrop;
   }
   return fallbackUrl;
+}
+
+export function applySeasonalPrice(baseUsd: number, modifierPct: number): number {
+  if (!modifierPct) return Math.round(baseUsd);
+  return Math.round(baseUsd * (1 + modifierPct / 100));
+}
+
+export function getEffectiveKilimanjaroRoutes(
+  settings: SiteControlSettings
+): (KilimanjaroRoute & { priceUsd: number })[] {
+  const kiliDaily = settings.pricing?.kiliDailyUsd ?? DEFAULT_PRICING_CONFIG.kiliDailyUsd;
+  return KILIMANJARO_ROUTES.map((r) => {
+    const ov = settings.kilimanjaroOverrides?.[r.id];
+    const days = ov?.days && ov.days > 0 ? ov.days : r.days;
+    const basePrice = ov?.priceUsd && ov.priceUsd > 0 ? ov.priceUsd : days * kiliDaily;
+    return {
+      ...r,
+      days,
+      successRate:
+        ov?.successRate && ov.successRate > 0 ? ov.successRate : r.successRate,
+      nickname: ov?.nickname?.trim() ? ov.nickname : r.nickname,
+      summary: ov?.summary?.trim() ? ov.summary : r.summary,
+      priceUsd: applySeasonalPrice(basePrice, settings.seasonalModifierPct),
+    };
+  });
+}
+
+export function getEffectiveParks(settings: SiteControlSettings): NationalPark[] {
+  return NATIONAL_PARKS.map((p) => {
+    const ov = settings.parkOverrides?.[p.slug];
+    if (!ov) return p;
+    return {
+      ...p,
+      tagline: ov.tagline?.trim() ? ov.tagline : p.tagline,
+      bestWindow: ov.bestWindow?.trim() ? ov.bestWindow : p.bestWindow,
+      area: ov.area?.trim() ? ov.area : p.area,
+      description: ov.description?.trim() ? ov.description : p.description,
+    };
+  });
 }
 
 export function applySiteThemeTokens(themeId: SiteThemeId, isDark: boolean): void {
@@ -278,20 +381,40 @@ export function applySiteThemeTokens(themeId: SiteThemeId, isDark: boolean): voi
   root.style.setProperty("--ring", tokens.ring);
 }
 
+function mergeSiteSettings(
+  remote?: Partial<SiteControlSettings> | null
+): SiteControlSettings {
+  return {
+    ...DEFAULT_SITE_SETTINGS,
+    ...(remote || {}),
+    pricing: {
+      ...DEFAULT_PRICING_CONFIG,
+      ...(remote?.pricing || {}),
+    },
+    customExpeditions: Array.isArray(remote?.customExpeditions)
+      ? remote.customExpeditions
+      : DEFAULT_SITE_SETTINGS.customExpeditions,
+    kilimanjaroOverrides: {
+      ...DEFAULT_SITE_SETTINGS.kilimanjaroOverrides,
+      ...(remote?.kilimanjaroOverrides || {}),
+    },
+    parkOverrides: {
+      ...DEFAULT_SITE_SETTINGS.parkOverrides,
+      ...(remote?.parkOverrides || {}),
+    },
+    imageOverrides: {
+      ...DEFAULT_SITE_SETTINGS.imageOverrides,
+      ...(remote?.imageOverrides || {}),
+    },
+  };
+}
+
 export function readSiteSettingsLocal(): SiteControlSettings {
   if (typeof window === "undefined") return DEFAULT_SITE_SETTINGS;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SITE_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<SiteControlSettings>;
-    return {
-      ...DEFAULT_SITE_SETTINGS,
-      ...parsed,
-      imageOverrides: {
-        ...DEFAULT_SITE_SETTINGS.imageOverrides,
-        ...(parsed.imageOverrides || {}),
-      },
-    };
+    return mergeSiteSettings(JSON.parse(raw) as Partial<SiteControlSettings>);
   } catch {
     return DEFAULT_SITE_SETTINGS;
   }
@@ -317,15 +440,9 @@ export async function fetchSiteSettingsRemote(): Promise<SiteControlSettings> {
   try {
     const snap = await getDoc(doc(fb.db, "site_config", "live"));
     if (snap.exists()) {
-      const remote = snap.data() as Partial<SiteControlSettings>;
-      const merged: SiteControlSettings = {
-        ...DEFAULT_SITE_SETTINGS,
-        ...remote,
-        imageOverrides: {
-          ...DEFAULT_SITE_SETTINGS.imageOverrides,
-          ...(remote.imageOverrides || {}),
-        },
-      };
+      const merged = mergeSiteSettings(
+        snap.data() as Partial<SiteControlSettings>
+      );
       saveSiteSettingsLocal(merged);
       return merged;
     }

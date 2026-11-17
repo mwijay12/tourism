@@ -60,7 +60,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       <SiteNavbar />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 w-full max-w-full overflow-x-clip">{children}</main>
       <SiteFooter />
       <PwaRegister />
     </>
